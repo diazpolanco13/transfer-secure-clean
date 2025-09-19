@@ -151,12 +151,13 @@ export class ForensicCapture {
           });
         },
         (error) => {
-          const errorMessages = {
+          const errorMessages: Record<number, string> = {
             1: 'Usuario denegó el permiso de ubicación',
             2: 'Posición no disponible',
             3: 'Tiempo de espera agotado'
           };
-          console.log(`⚠️ [GPS] Error ${error.code}: ${errorMessages[error.code] || error.message}`);
+          const errorMessage = errorMessages[error.code] || error.message || 'Error desconocido';
+          console.log(`⚠️ [GPS] Error ${error.code}: ${errorMessage}`);
           console.log('🔄 [GPS] Continuando con geolocalización por IP...');
           resolve(undefined);
         },
