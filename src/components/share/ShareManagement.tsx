@@ -77,7 +77,6 @@ export const ShareManagement: React.FC<ShareManagementProps> = ({
       
       if (isSupabaseConfigured()) {
         // Primero verificar si ya existe un enlace para este archivo
-        const { FileService } = await import('../../services/fileService');
         
         // Por ahora, siempre crear un nuevo enlace
         // TODO: En el futuro, verificar si ya existe uno

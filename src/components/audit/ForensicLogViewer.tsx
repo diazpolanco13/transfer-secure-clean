@@ -33,7 +33,7 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedLog, setSelectedLog] = useState<ForensicData | null>(null);
-  const [showMap, setShowMap] = useState(false);
+  // const [, setShowMap] = useState(false); // No usado actualmente
   const [openMaps, setOpenMaps] = useState<Set<number>>(new Set());
 
   // En producción, no mostrar nada si no es desarrollo
@@ -364,7 +364,7 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
                     <div><strong>Access ID:</strong> {log.accessId}</div>
                     <div><strong>Link ID:</strong> {log.linkId}</div>
                     <div><strong>Audit ID:</strong> {log.auditId}</div>
-                    <div><strong>Session ID:</strong> {log.sessionId || 'N/A'}</div>
+                    <div><strong>Session End:</strong> {log.sessionEnd || 'N/A'}</div>
                     <div className="col-span-2"><strong>User Agent:</strong> <span className="font-mono text-xs">{log.userAgent}</span></div>
                     <div><strong>Languages:</strong> {log.browserFingerprint?.languages?.join(', ') || 'N/A'}</div>
                     <div><strong>Platform:</strong> {log.browserFingerprint?.platform || 'N/A'}</div>

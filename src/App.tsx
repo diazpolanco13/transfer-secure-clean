@@ -47,7 +47,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'share' | 'stats' | 'security'>('upload')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
-  const [isLoadingFiles, setIsLoadingFiles] = useState(false)
+  const [, setIsLoadingFiles] = useState(false)
 
   // === 🗄️ CARGAR ARCHIVOS DESDE SUPABASE AL INICIAR ===
   useEffect(() => {

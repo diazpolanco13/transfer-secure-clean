@@ -1,7 +1,7 @@
 // 📁 SERVICIO DE ARCHIVOS PARA SUPABASE
 // Maneja todas las operaciones de archivos subidos
 
-import { supabase, getClientIP, type Database } from '../lib/supabase';
+import { supabase, type Database } from '../lib/supabase';
 
 type UploadedFileInsert = Database['public']['Tables']['uploaded_files']['Insert'];
 type UploadedFileRow = Database['public']['Tables']['uploaded_files']['Row'];
