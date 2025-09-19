@@ -4,13 +4,27 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Configuración de Supabase
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Validar configuración
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ [API] Variables de entorno de Supabase no configuradas');
+  console.error('🔧 Configurar en Vercel: SUPABASE_URL y SUPABASE_ANON_KEY');
+}
+
+const supabase = supabaseUrl && supabaseAnonKey
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 export default async function handler(req, res) {
   try {
+    // Verificar configuración de Supabase
+    if (!supabase) {
+      console.error('❌ [API] Supabase no configurado');
+      return generateErrorPage(res, 'Servicio temporalmente no disponible');
+    }
+
     const { fileId } = req.query;
 
     if (!fileId) {
