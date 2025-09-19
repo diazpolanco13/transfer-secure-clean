@@ -17,6 +17,8 @@ import { SecureUploadZone } from './components/upload/SecureUploadZone'
 import { UploadHistory } from './components/upload/UploadHistory'
 import { ShareManagement } from './components/share/ShareManagement'
 import { SecureReceive } from './components/receive/SecureReceive'
+import { FileService } from './services/fileService'
+import { isSupabaseConfigured, getClientIP } from './lib/supabase'
 
 interface UploadedFile {
   auditId: string;
@@ -48,6 +50,29 @@ function App() {
   const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'share' | 'receive' | 'stats' | 'security'>('upload')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false)
+
+  // === 🗄️ CARGAR ARCHIVOS DESDE SUPABASE AL INICIAR ===
+  useEffect(() => {
+    const loadFilesFromSupabase = async () => {
+      if (isSupabaseConfigured()) {
+        setIsLoadingFiles(true);
+        try {
+          console.log('🗄️ [SUPABASE] Cargando archivos desde base de datos...');
+          const files = await FileService.getUploadedFiles();
+          const convertedFiles = files.map(FileService.convertRowToUploadedFile);
+          setUploadedFiles(convertedFiles);
+          console.log(`✅ [SUPABASE] ${convertedFiles.length} archivos cargados`);
+        } catch (error) {
+          console.error('❌ [SUPABASE] Error cargando archivos:', error);
+        } finally {
+          setIsLoadingFiles(false);
+        }
+      }
+    };
+
+    loadFilesFromSupabase();
+  }, []);
 
   // Cargar preferencia de tema desde localStorage
   useEffect(() => {
@@ -92,23 +117,68 @@ function App() {
 
   const theme = getThemeClasses()
 
-  const handleUploadComplete = (files: any[]) => {
-    // Simular datos de auditoría (en producción vendrían del backend)
-    const newFiles: UploadedFile[] = files.map((file, index) => ({
-      auditId: `audit-${Date.now()}-${index}`,
-      originalName: file.name,
-      secureName: file.key,
-      secureUrl: file.url,
-      fileSize: file.size,
-      fileType: file.type || 'application/octet-stream',
-      clientIP: '192.168.1.100', // Simulado
-      uploadedAt: new Date().toISOString(),
-      processedAt: new Date().toISOString(),
-    }))
+  const handleUploadComplete = async (files: any[]) => {
+    try {
+      const clientIP = await getClientIP();
+      const now = new Date().toISOString();
+      
+      // Crear datos de archivos con auditoría completa
+      const newFiles: UploadedFile[] = await Promise.all(files.map(async (file, index) => {
+        // Si es un archivo real (File object), convertirlo a base64
+        let fileUrl = file.url;
+        
+        if (file instanceof File) {
+          // Convertir archivo a base64 para almacenamiento temporal
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(file);
+          });
+          fileUrl = await base64Promise;
+        }
+        
+        return {
+          auditId: `audit-${Date.now()}-${index}`,
+          originalName: file.name,
+          secureName: file.key || file.name,
+          secureUrl: fileUrl || `data:application/octet-stream;base64,`, // Usar data URL si no hay URL real
+          fileSize: file.size,
+          fileType: file.type || 'application/octet-stream',
+          clientIP: clientIP,
+          uploadedAt: now,
+          processedAt: now,
+        };
+      }));
 
-    setUploadedFiles(prev => [...newFiles, ...prev])
-    // Automáticamente redirigir a gestión del archivo recién subido
-    setActiveTab('share')
+      // === 🗄️ GUARDAR EN SUPABASE ===
+      if (isSupabaseConfigured()) {
+        console.log('🗄️ [SUPABASE] Guardando archivos en base de datos...');
+        
+        for (const file of newFiles) {
+          const supabaseId = await FileService.storeUploadedFile(file);
+          if (supabaseId) {
+            console.log(`✅ [SUPABASE] Archivo guardado: ${file.originalName}`);
+            
+            // Crear enlace de compartir automáticamente
+            const shareLink = await FileService.createShareLink(file.auditId);
+            if (shareLink) {
+              console.log(`🔗 [SUPABASE] Enlace creado: ${shareLink.link_id}`);
+            }
+          }
+        }
+      } else {
+        console.log('🔧 [SUPABASE] No configurado - Solo guardando localmente');
+      }
+
+      // Actualizar estado local
+      setUploadedFiles(prev => [...newFiles, ...prev]);
+      
+      // Automáticamente redirigir a gestión del archivo recién subido
+      setActiveTab('share');
+      
+    } catch (error) {
+      console.error('❌ [UPLOAD] Error procesando archivos:', error);
+    }
   }
 
   const handleUploadError = (error: string) => {
@@ -208,7 +278,40 @@ function App() {
       case 'receive':
         return (
           <div className="max-w-6xl mx-auto">
-            <SecureReceive fileId="demo-file-12345" />
+            {uploadedFiles.length > 0 && uploadedFiles[0] ? (
+              <div className="space-y-4">
+                <div className={`${theme.card} border rounded-lg p-6`}>
+                  <h3 className={`text-lg font-medium ${theme.text.primary} mb-4`}>
+                    Vista Previa de Recepción
+                  </h3>
+                  <p className={`${theme.text.secondary} mb-4`}>
+                    Esta es una vista de demostración. Para ver la página real de recepción, 
+                    usa el enlace compartido del archivo.
+                  </p>
+                  <div className={`${theme.card} border rounded-lg p-4`}>
+                    <p className={`text-sm ${theme.text.primary} font-medium mb-2`}>
+                      Último archivo subido:
+                    </p>
+                    <p className={`text-sm ${theme.text.secondary}`}>
+                      {uploadedFiles[0].originalName}
+                    </p>
+                    <p className={`text-xs ${theme.text.muted} mt-2`}>
+                      Para acceder al enlace real, ve a "Gestión Envío"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <EyeIcon className={`mx-auto h-12 w-12 ${theme.text.muted}`} />
+                <h3 className={`mt-2 text-sm font-medium ${theme.text.primary}`}>
+                  No hay archivos para previsualizar
+                </h3>
+                <p className={`mt-1 text-sm ${theme.text.secondary}`}>
+                  Sube un archivo primero para poder ver la página de recepción
+                </p>
+              </div>
+            )}
           </div>
         )
       

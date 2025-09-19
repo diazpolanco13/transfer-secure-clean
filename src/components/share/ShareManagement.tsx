@@ -70,14 +70,54 @@ export const ShareManagement: React.FC<ShareManagementProps> = ({
   const generateShareLink = async () => {
     setIsGenerating(true);
     
-    // Simular generación de link único
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Importar el servicio de archivos
+      const { FileService } = await import('../../services/fileService');
+      const { isSupabaseConfigured } = await import('../../lib/supabase');
+      
+      if (isSupabaseConfigured()) {
+        // Primero verificar si ya existe un enlace para este archivo
+        const { FileService } = await import('../../services/fileService');
+        
+        // Por ahora, siempre crear un nuevo enlace
+        // TODO: En el futuro, verificar si ya existe uno
+        const shareLink = await FileService.createShareLink(
+          file.auditId,
+          recipientEmail || undefined,
+          expirationDays,
+          customMessage || undefined
+        );
+        
+        if (shareLink && shareLink.link_id) {
+          // Usar el link_id real de Supabase
+          const generatedLink = `${window.location.origin}/receive/${shareLink.link_id}`;
+          setShareLink(generatedLink);
+          setLinkGenerated(true);
+          console.log('✅ Enlace generado con link_id real:', shareLink.link_id);
+        } else {
+          console.error('❌ Error: No se pudo crear el enlace en Supabase');
+          // Fallback: generar link local
+          const uniqueId = `link-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+          const generatedLink = `${window.location.origin}/receive/${uniqueId}`;
+          setShareLink(generatedLink);
+          setLinkGenerated(true);
+        }
+      } else {
+        // Si no hay Supabase, generar link local
+        const uniqueId = `link-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        const generatedLink = `${window.location.origin}/receive/${uniqueId}`;
+        setShareLink(generatedLink);
+        setLinkGenerated(true);
+      }
+    } catch (error) {
+      console.error('❌ Error generando enlace:', error);
+      // Fallback en caso de error
+      const uniqueId = `link-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      const generatedLink = `${window.location.origin}/receive/${uniqueId}`;
+      setShareLink(generatedLink);
+      setLinkGenerated(true);
+    }
     
-    const uniqueId = `${file.auditId.slice(0, 8)}-${Date.now().toString(36)}`;
-    const generatedLink = `${window.location.origin}/receive/${uniqueId}`;
-    
-    setShareLink(generatedLink);
-    setLinkGenerated(true);
     setIsGenerating(false);
   };
 
@@ -203,6 +243,7 @@ export const ShareManagement: React.FC<ShareManagementProps> = ({
                   value={expirationDays}
                   onChange={(e) => setExpirationDays(Number(e.target.value))}
                   className={`w-full px-3 py-2 border rounded-md ${theme.input} focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  title="Seleccionar días de expiración"
                 >
                   <option value={1}>1 día</option>
                   <option value={3}>3 días</option>

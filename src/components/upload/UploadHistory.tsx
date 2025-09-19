@@ -1,4 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { ForensicLogViewer } from '../audit/ForensicLogViewer';
+import type { ForensicData } from '../../types/forensic';
+import { ForensicService } from '../../services/forensicService';
+import { FileService } from '../../services/fileService';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 interface UploadedFile {
   auditId: string;
@@ -10,6 +16,14 @@ interface UploadedFile {
   clientIP: string;
   uploadedAt: string;
   processedAt: string;
+  // === 🕵️ NUEVOS CAMPOS PARA AUDITORÍA FORENSE ===
+  forensicLogs?: ForensicData[];
+  shareLinks?: {
+    id: string;
+    url: string;
+    accessCount: number;
+    lastAccessed?: string;
+  }[];
 }
 
 interface UploadHistoryProps {
@@ -21,12 +35,48 @@ interface UploadHistoryProps {
 }
 
 export const UploadHistory: React.FC<UploadHistoryProps> = ({
-  files,
+  files: propFiles,
   onDownload,
   onShare,
   onDelete,
   darkMode = true,
 }) => {
+  const [files, setFiles] = useState<UploadedFile[]>(propFiles || []);
+  const [expandedForensicLogs, setExpandedForensicLogs] = useState<string | null>(null);
+  const [realForensicLogs, setRealForensicLogs] = useState<Record<string, ForensicData[]>>({});
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+
+  // === 🗄️ CARGAR ARCHIVOS DESDE SUPABASE ===
+  useEffect(() => {
+    const loadFilesFromSupabase = async () => {
+      if (isSupabaseConfigured()) {
+        setIsLoadingFiles(true);
+        try {
+          console.log('🗄️ [HISTORIAL] Cargando archivos desde Supabase...');
+          const supabaseFiles = await FileService.getUploadedFiles();
+          const convertedFiles = supabaseFiles.map(FileService.convertRowToUploadedFile);
+          setFiles(convertedFiles);
+          console.log(`✅ [HISTORIAL] ${convertedFiles.length} archivos cargados`);
+        } catch (error) {
+          console.error('❌ [HISTORIAL] Error cargando archivos:', error);
+        } finally {
+          setIsLoadingFiles(false);
+        }
+      } else {
+        // Si no hay Supabase, usar los archivos que vienen como prop
+        setFiles(propFiles || []);
+      }
+    };
+
+    loadFilesFromSupabase();
+  }, [propFiles]);
+
+  // === 🔄 ACTUALIZAR CUANDO CAMBIEN LAS PROPS ===
+  useEffect(() => {
+    if (!isSupabaseConfigured() && propFiles) {
+      setFiles(propFiles);
+    }
+  }, [propFiles]);
   // Generar clases dinámicas según el tema
   const getThemeClasses = () => ({
     text: {
@@ -43,12 +93,105 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
   })
 
   const theme = getThemeClasses()
+  
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // === 🕵️ GENERAR DATOS FORENSES SIMULADOS PARA DESARROLLO ===
+  const generateMockForensicLogs = (auditId: string): ForensicData[] => {
+    const mockLogs: ForensicData[] = [];
+    const accessCount = Math.floor(Math.random() * 5) + 1; // 1-5 accesos
+
+    for (let i = 0; i < accessCount; i++) {
+      const baseTime = Date.now() - (Math.random() * 7 * 24 * 60 * 60 * 1000); // Últimos 7 días
+      const isDownloaded = i === 0 || Math.random() > 0.6; // Primer acceso siempre descarga, otros 40% probabilidad
+
+      mockLogs.push({
+        accessId: `access-${baseTime}-${Math.random().toString(36).substring(2, 8)}`,
+        linkId: `link-${auditId.split('-')[1]}`,
+        auditId: auditId,
+        clientIP: `192.168.1.${Math.floor(Math.random() * 255)}`,
+        proxyIPs: Math.random() > 0.8 ? [`10.0.0.${Math.floor(Math.random() * 255)}`] : undefined,
+        userAgent: [
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+        ][Math.floor(Math.random() * 3)],
+        browserFingerprint: {
+          screen: {
+            width: [1920, 1366, 1536, 375][Math.floor(Math.random() * 4)],
+            height: [1080, 768, 864, 812][Math.floor(Math.random() * 4)],
+            colorDepth: 24,
+            pixelRatio: Math.random() > 0.5 ? 1 : 2
+          },
+          timezone: ['America/Argentina/Buenos_Aires', 'America/New_York', 'Europe/Madrid'][Math.floor(Math.random() * 3)],
+          language: 'es-ES',
+          languages: ['es-ES', 'es', 'en'],
+          platform: ['Win32', 'MacIntel', 'iPhone'][Math.floor(Math.random() * 3)],
+          cookieEnabled: true,
+          doNotTrack: Math.random() > 0.7,
+          hardwareConcurrency: [4, 8, 12][Math.floor(Math.random() * 3)],
+          deviceMemory: Math.random() > 0.5 ? [4, 8, 16][Math.floor(Math.random() * 3)] : undefined
+        },
+        geolocation: Math.random() > 0.4 ? {
+          latitude: -34.6118 + (Math.random() - 0.5) * 0.1, // Buenos Aires aprox
+          longitude: -58.3960 + (Math.random() - 0.5) * 0.1,
+          accuracy: Math.floor(Math.random() * 50) + 10,
+          timestamp: baseTime
+        } : undefined,
+        referer: Math.random() > 0.3 ? 'https://wa.me/' : 'direct',
+        sessionStart: new Date(baseTime).toISOString(),
+        sessionEnd: isDownloaded ? new Date(baseTime + Math.random() * 300000).toISOString() : undefined, // 0-5 min
+        downloadTime: isDownloaded ? new Date(baseTime + Math.random() * 60000).toISOString() : undefined, // 0-1 min
+        connectionType: ['wifi', '4g', 'ethernet'][Math.floor(Math.random() * 3)],
+        effectiveType: ['4g', '3g', 'slow-2g'][Math.floor(Math.random() * 3)],
+        createdAt: new Date(baseTime).toISOString(),
+        isDownloaded,
+        accessCount: 1,
+        pageVisibility: 'visible',
+        focusEvents: [
+          { timestamp: new Date(baseTime).toISOString(), event: 'focus' },
+          { timestamp: new Date(baseTime + 30000).toISOString(), event: 'blur' }
+        ]
+      });
+    }
+
+    return mockLogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  };
+
+  // === 🗄️ CARGAR DATOS REALES DE SUPABASE ===
+  const loadRealForensicLogs = async (auditId: string) => {
+    if (isSupabaseConfigured() && !realForensicLogs[auditId]) {
+      try {
+        console.log('🗄️ [SUPABASE] Cargando logs forenses para:', auditId);
+        const logs = await ForensicService.getForensicLogsByAuditId(auditId);
+        const forensicData = logs.map(log => ForensicService.convertRowToForensicData(log));
+        
+        setRealForensicLogs(prev => ({
+          ...prev,
+          [auditId]: forensicData
+        }));
+        
+        console.log('✅ [SUPABASE] Logs cargados:', forensicData.length);
+      } catch (error) {
+        console.error('❌ [SUPABASE] Error cargando logs:', error);
+      }
+    }
+  };
+
+  const handleViewForensicLogs = async (file: UploadedFile) => {
+    if (expandedForensicLogs === file.auditId) {
+      setExpandedForensicLogs(null);
+    } else {
+      setExpandedForensicLogs(file.auditId);
+      // Cargar datos reales de Supabase
+      await loadRealForensicLogs(file.auditId);
+    }
   };
 
   const formatDate = (date: string): string => {
@@ -77,6 +220,24 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
     );
   };
 
+  // === 🔄 INDICADOR DE CARGA ===
+  if (isLoadingFiles) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin mx-auto h-12 w-12 text-blue-500">
+          <svg fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <h3 className={`mt-2 text-sm font-medium ${theme.text.primary}`}>Cargando archivos...</h3>
+        <p className={`mt-1 text-sm ${theme.text.secondary}`}>
+          Obteniendo datos desde Supabase
+        </p>
+      </div>
+    );
+  }
+
   if (files.length === 0) {
     return (
       <div className="text-center py-12">
@@ -85,7 +246,7 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
         </svg>
         <h3 className={`mt-2 text-sm font-medium ${theme.text.primary}`}>No hay archivos subidos</h3>
         <p className={`mt-1 text-sm ${theme.text.secondary}`}>
-          Sube tu primer archivo para comenzar
+          {isSupabaseConfigured() ? 'Sube tu primer archivo para comenzar' : 'Configura Supabase para persistencia de datos'}
         </p>
       </div>
     );
@@ -133,6 +294,17 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                     >
                       Compartir
                     </button>
+                    {/* === 🕵️ BOTÓN LOGS FORENSES (SOLO DESARROLLO) === */}
+                    {import.meta.env.DEV && (
+                      <button
+                        onClick={() => handleViewForensicLogs(file)}
+                        className={`${theme.button.blue} text-sm font-medium flex items-center`}
+                        title="Ver logs de acceso forenses (solo desarrollo)"
+                      >
+                        <ShieldCheckIcon className="h-4 w-4 mr-1" />
+                        Logs
+                      </button>
+                    )}
                     <button
                       onClick={() => onDelete?.(file)}
                       className={`${theme.button.red} text-sm font-medium`}
@@ -175,6 +347,21 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                 </div>
               </div>
             </div>
+            
+            {/* === 🕵️ VISOR DE LOGS FORENSES === */}
+            {expandedForensicLogs === file.auditId && (
+              <ForensicLogViewer
+                linkId={`link-${file.auditId.split('-')[1]}`}
+                fileName={file.originalName}
+                forensicLogs={
+                  realForensicLogs[file.auditId] || 
+                  file.forensicLogs || 
+                  generateMockForensicLogs(file.auditId)
+                }
+                darkMode={darkMode}
+                isDevelopment={import.meta.env.DEV}
+              />
+            )}
           </div>
         ))}
       </div>

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 Test de Detección de IP Real</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(0,0,0,0.3);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { 
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+        .result-box {
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #4ade80;
+        }
+        .ip-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+        }
+        .label { font-weight: bold; }
+        .value { 
+            font-family: 'Courier New', monospace;
+            color: #4ade80;
+        }
+        .warning {
+            background: rgba(255,59,48,0.2);
+            border-left: 4px solid #ff3b30;
+        }
+        .success {
+            background: rgba(52,199,89,0.2);
+            border-left: 4px solid #34c759;
+        }
+        button {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        #loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test de Detección de IP Real</h1>
+        
+        <div class="result-box warning">
+            <h3>⚠️ ADVERTENCIA LEGAL</h3>
+            <p>Esta herramienta demuestra cómo Transfer Secure detecta:</p>
+            <ul>
+                <li>✅ Tu IP pública (la que ve internet)</li>
+                <li>✅ Tu IP local (en tu red)</li>
+                <li>✅ Tu IP real (si hay WebRTC leak)</li>
+                <li>✅ Si estás usando VPN/Proxy</li>
+                <li>✅ Tu huella digital única del dispositivo</li>
+            </ul>
+        </div>
+
+        <button onclick="detectarIPs()">🚀 INICIAR DETECCIÓN COMPLETA</button>
+
+        <div id="loading">
+            <div class="spinner"></div>
+            <p>Analizando tu conexión...</p>
+        </div>
+
+        <div id="results" style="display: none;">
+            <!-- Resultados se mostrarán aquí -->
+        </div>
+    </div>
+
+    <script>
+        // === DETECCIÓN WEBRTC PARA IP REAL ===
+        async function detectWebRTCLeak() {
+            return new Promise((resolve) => {
+                const ips = new Set();
+                const pc = new RTCPeerConnection({
+                    iceServers: [{urls: 'stun:stun.l.google.com:19302'}]
+                });
+                
+                pc.onicecandidate = (event) => {
+                    if (!event.candidate) {
+                        const detectedIPs = Array.from(ips);
+                        const localIP = detectedIPs.find(ip => 
+                            ip.startsWith('192.168.') || 
+                            ip.startsWith('10.') || 
+                            ip.startsWith('172.')
+                        );
+                        const publicIP = detectedIPs.find(ip => 
+                            !ip.startsWith('192.168.') && 
+                            !ip.startsWith('10.') && 
+                            !ip.startsWith('172.') &&
+                            !ip.includes(':') // Excluir IPv6
+                        );
+                        
+                        pc.close();
+                        resolve({ localIP, publicIP });
+                        return;
+                    }
+                    
+                    const candidate = event.candidate.candidate;
+                    const ipRegex = /([0-9]{1,3}\.){3}[0-9]{1,3}/g;
+                    const foundIPs = candidate.match(ipRegex);
+                    
+                    if (foundIPs) {
+                        foundIPs.forEach(ip => ips.add(ip));
+                    }
+                };
+                
+                pc.createDataChannel('');
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                
+                setTimeout(() => {
+                    pc.close();
+                    resolve({ localIP: null, publicIP: null });
+                }, 5000);
+            });
+        }
+
+        // === OBTENER IP PÚBLICA ===
+        async function getPublicIP() {
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                return await response.json();
+            } catch {
+                return { ip: 'Error al detectar' };
+            }
+        }
+
+        // === CANVAS FINGERPRINT ===
+        function getCanvasFingerprint() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText('Transfer Secure Forensic 🔒', 2, 2);
+            return canvas.toDataURL().slice(-50, -30);
+        }
+
+        // === FUNCIÓN PRINCIPAL ===
+        async function detectarIPs() {
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            
+            // Recolectar datos
+            const [webrtc, publicData] = await Promise.all([
+                detectWebRTCLeak(),
+                getPublicIP()
+            ]);
+            
+            const fingerprint = getCanvasFingerprint();
+            const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            
+            // Detectar VPN
+            const vpnDetected = (webrtc.publicIP && webrtc.publicIP !== publicData.ip) ||
+                               (timezone === 'America/Caracas' && publicData.country !== 'VE');
+            
+            // Mostrar resultados
+            loading.style.display = 'none';
+            results.style.display = 'block';
+            results.innerHTML = `
+                <div class="result-box ${vpnDetected ? 'warning' : 'success'}">
+                    <h3>${vpnDetected ? '🔐 VPN DETECTADA' : '✅ CONEXIÓN DIRECTA'}</h3>
+                    ${vpnDetected ? '<p>Hemos detectado que estás usando una VPN o proxy</p>' : '<p>No se detectó uso de VPN</p>'}
+                </div>
+
+                <div class="result-box">
+                    <h3>📍 IPs Detectadas</h3>
+                    <div class="ip-item">
+                        <span class="label">IP Pública (VPN/ISP):</span>
+                        <span class="value">${publicData.ip || 'No detectada'}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">IP Real (WebRTC):</span>
+                        <span class="value">${webrtc.publicIP || 'No hay leak - VPN segura'}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">IP Local (Red):</span>
+                        <span class="value">${webrtc.localIP || 'No detectada'}</span>
+                    </div>
+                </div>
+
+                <div class="result-box">
+                    <h3>🌍 Ubicación</h3>
+                    <div class="ip-item">
+                        <span class="label">País:</span>
+                        <span class="value">${publicData.country_name || 'Desconocido'}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">Ciudad:</span>
+                        <span class="value">${publicData.city || 'Desconocida'}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">ISP:</span>
+                        <span class="value">${publicData.org || 'Desconocido'}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">Timezone:</span>
+                        <span class="value">${timezone}</span>
+                    </div>
+                </div>
+
+                <div class="result-box">
+                    <h3>🔒 Seguridad</h3>
+                    <div class="ip-item">
+                        <span class="label">Fingerprint único:</span>
+                        <span class="value">${fingerprint}</span>
+                    </div>
+                    <div class="ip-item">
+                        <span class="label">VPN Detectada:</span>
+                        <span class="value">${vpnDetected ? 'SÍ' : 'NO'}</span>
+                    </div>
+                    ${webrtc.publicIP && webrtc.publicIP !== publicData.ip ? 
+                        `<div class="ip-item" style="background: rgba(255,59,48,0.3);">
+                            <span class="label">⚠️ LEAK DETECTADO:</span>
+                            <span class="value">Tu IP real es ${webrtc.publicIP}</span>
+                        </div>` : ''
+                    }
+                </div>
+
+                <div class="result-box warning">
+                    <h3>📊 Resumen Forense</h3>
+                    <p><strong>Esto es lo que Transfer Secure captura:</strong></p>
+                    <ul>
+                        <li>✅ Todas las IPs detectadas (pública, real, local)</li>
+                        <li>✅ Ubicación geográfica precisa</li>
+                        <li>✅ Huella digital única del dispositivo</li>
+                        <li>✅ Detección de VPN/Proxy</li>
+                        <li>✅ Información del navegador y sistema</li>
+                    </ul>
+                    <p style="margin-top: 15px;"><em>Esta información se almacena de forma segura para cumplimiento legal.</em></p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

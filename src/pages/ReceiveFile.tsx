@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   ArrowDownTrayIcon, 
@@ -8,6 +8,10 @@ import {
   LockClosedIcon,
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
+import { ForensicCapture } from '../utils/forensicCapture';
+import type { ForensicData } from '../types/forensic';
+import { FileService } from '../services/fileService';
+import { isSupabaseConfigured } from '../lib/supabase';
 // MetaTags component inline para evitar problemas de import
 const MetaTags: React.FC<{
   fileName: string;
@@ -118,6 +122,76 @@ const ReceiveFile: React.FC = () => {
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [error, setError] = useState<string>('');
+  
+  // === 🕵️ SISTEMA DE CAPTURA FORENSE ===
+  const forensicCapture = useRef<ForensicCapture | null>(null);
+  const [forensicData, setForensicData] = useState<ForensicData | null>(null);
+
+  // === 🕵️ INICIALIZAR CAPTURA FORENSE AL CARGAR LA PÁGINA ===
+  useEffect(() => {
+    if (fileId) {
+      const initializeForensicCapture = async () => {
+        try {
+          // === 🗄️ OBTENER DATOS REALES DESDE SUPABASE ===
+          let auditId = `audit-${fileId.split('-')[0]}`; // Fallback
+          
+          if (isSupabaseConfigured()) {
+            console.log('🗄️ [SUPABASE] Obteniendo datos del archivo:', fileId);
+            const { file, shareLink } = await FileService.getFileByLinkId(fileId);
+            
+            if (file && shareLink) {
+              auditId = file.audit_id;
+              console.log('✅ [SUPABASE] Archivo encontrado:', file.original_name);
+              
+              // Actualizar datos del archivo con información real
+              setFileData({
+                id: fileId,
+                originalName: file.original_name,
+                fileSize: file.file_size,
+                fileType: file.file_type,
+                uploadDate: file.uploaded_at,
+                expiryDate: shareLink.expires_at,
+                senderMessage: shareLink.custom_message || undefined
+              });
+              
+              // Actualizar URL de previsualización
+              setPreviewUrl(file.secure_url);
+            } else {
+              console.warn('⚠️ [SUPABASE] Archivo no encontrado, usando datos simulados');
+            }
+          } else {
+            console.log('🔧 [SUPABASE] No configurado, usando datos simulados');
+          }
+          
+          // Inicializar sistema de captura forense
+          forensicCapture.current = new ForensicCapture(fileId, auditId);
+          
+          // Capturar datos forenses inmediatamente
+          const data = await forensicCapture.current.captureForensicData();
+          setForensicData(data);
+          
+          console.log('🕵️ [FORENSE] Datos capturados:', {
+            accessId: data.accessId,
+            linkId: data.linkId,
+            auditId: data.auditId,
+            clientIP: data.clientIP,
+            realIP: data.realIP || 'no detectada',
+            vpnDetected: data.vpnDetected,
+            timestamp: data.createdAt
+          });
+          
+          // IMPORTANTE: Los datos forenses se guardan automáticamente en captureForensicData()
+          console.log('📝 [FORENSE] Verificar en Supabase si se guardaron los datos');
+          
+        } catch (error) {
+          console.error('❌ [FORENSE] Error inicializando captura:', error);
+          setError('Error cargando archivo');
+        }
+      };
+
+      initializeForensicCapture();
+    }
+  }, [fileId]);
 
   // Simular datos del archivo basado en el ID
   useEffect(() => {
@@ -200,8 +274,33 @@ const ReceiveFile: React.FC = () => {
     });
   }, [isDecrypting, isDecrypted, decryptionProgress, fileData]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!fileData || isDownloaded) return;
+    
+    // === 🕵️ REGISTRAR DESCARGA EN SISTEMA FORENSE ===
+    if (forensicCapture.current) {
+      await forensicCapture.current.recordDownload();
+    }
+    
+    // Actualizar datos forenses con información de descarga
+    if (forensicData) {
+      const updatedForensicData = {
+        ...forensicData,
+        isDownloaded: true,
+        downloadTime: new Date().toISOString(),
+        sessionEnd: new Date().toISOString()
+      };
+      setForensicData(updatedForensicData);
+      
+      console.log('🕵️ [FORENSE] Descarga completada y registrada:', {
+        accessId: updatedForensicData.accessId,
+        downloadTime: updatedForensicData.downloadTime,
+        fileName: fileData.originalName
+      });
+      
+      // TODO: Actualizar en base de datos
+      // await updateForensicData(updatedForensicData);
+    }
     
     // Simular descarga
     const link = document.createElement('a');
@@ -541,6 +640,37 @@ const ReceiveFile: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* AVISO LEGAL DE CUMPLIMIENTO */}
+        <div className="mt-8 mx-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start">
+              <svg className="h-5 w-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <div className="text-sm">
+                <p className="font-medium text-yellow-800 mb-1">
+                  ⚖️ AVISO LEGAL - Auditoría y Cumplimiento
+                </p>
+                <p className="text-yellow-700 text-xs">
+                  Por seguridad y cumplimiento legal, este acceso registra:
+                </p>
+                <ul className="text-yellow-600 text-xs mt-2 space-y-1">
+                  <li>• <strong>IP Real:</strong> Tu dirección IP verdadera (detectamos VPNs)</li>
+                  <li>• <strong>Ubicación:</strong> Coordenadas GPS precisas si las autorizas</li>
+                  <li>• <strong>Dispositivo:</strong> Información completa del navegador y hardware</li>
+                  <li>• <strong>Actividad:</strong> Hora de acceso, duración y si descargas el archivo</li>
+                </ul>
+                <p className="text-yellow-700 text-xs mt-2 font-medium">
+                  📋 Estos datos pueden ser proporcionados a autoridades judiciales.
+                </p>
+                <p className="text-yellow-600 text-xs mt-1">
+                  Al continuar, aceptas estos términos. Para más información: legal@transfersecure.com
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
