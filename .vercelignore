@@ -10,7 +10,6 @@
 !public/**/*
 
 # NO ignorar archivos de configuración necesarios
-!middleware.js
 !vercel.json
 !package.json
 
