@@ -185,19 +185,65 @@ function App() {
     alert(`Error en la subida: ${error}`)
   }
 
-  const handleDownload = (file: UploadedFile) => {
-    window.open(file.secureUrl, '_blank')
+  const handleDownload = async (file: UploadedFile) => {
+    try {
+      console.log('📥 Descargando archivo:', file.originalName);
+      
+      // Crear un enlace temporal para descargar
+      const link = document.createElement('a');
+      link.href = file.secureUrl;
+      link.download = file.originalName;
+      link.target = '_blank';
+      
+      // Agregar al DOM, hacer clic y remover
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      console.log('✅ Descarga iniciada para:', file.originalName);
+    } catch (error) {
+      console.error('❌ Error al descargar archivo:', error);
+      alert('Error al descargar el archivo. Por favor, intenta de nuevo.');
+    }
   }
 
   const handleShare = (file: UploadedFile) => {
-    const shareUrl = `${window.location.origin}/share/${file.auditId}`
-    navigator.clipboard.writeText(shareUrl)
-    alert(`Enlace copiado: ${shareUrl}`)
+    console.log('🔗 Compartiendo archivo:', file.originalName);
+    
+    // Cambiar a la sección de gestión de envío
+    setActiveTab('share');
+    
+    console.log('✅ Navegando a gestión de envío para:', file.auditId);
   }
 
-  const handleDelete = (file: UploadedFile) => {
-    if (confirm(`¿Eliminar ${file.originalName}?`)) {
-      setUploadedFiles(prev => prev.filter(f => f.auditId !== file.auditId))
+  const handleDelete = async (file: UploadedFile) => {
+    const confirmDelete = window.confirm(
+      `¿Estás seguro de que quieres eliminar "${file.originalName}"?\n\nEsta acción no se puede deshacer y eliminará:\n- El archivo y sus metadatos\n- Todos los enlaces compartidos\n- Los logs de auditoría forense\n\n¿Continuar?`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      console.log('🗑️ Eliminando archivo:', file.originalName);
+      
+      if (isSupabaseConfigured()) {
+        // Eliminar de Supabase
+        const success = await FileService.deleteUploadedFile(file.auditId);
+        if (!success) {
+          throw new Error('Error eliminando archivo de Supabase');
+        }
+        console.log('✅ Archivo eliminado de Supabase');
+      }
+      
+      // Actualizar estado local
+      setUploadedFiles(prev => prev.filter(f => f.auditId !== file.auditId));
+      
+      console.log('✅ Archivo eliminado del estado local');
+      alert(`Archivo "${file.originalName}" eliminado correctamente.`);
+      
+    } catch (error) {
+      console.error('❌ Error al eliminar archivo:', error);
+      alert('Error al eliminar el archivo. Por favor, intenta de nuevo.');
     }
   }
 

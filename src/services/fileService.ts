@@ -191,6 +191,56 @@ export class FileService {
     }
   }
 
+  // === ELIMINAR ARCHIVO SUBIDO ===
+  static async deleteUploadedFile(auditId: string): Promise<boolean> {
+    if (!supabase) {
+      console.warn('⚠️ [ARCHIVOS] Supabase no está configurado');
+      return false;
+    }
+
+    try {
+      console.log('🗑️ [ARCHIVOS] Eliminando archivo:', auditId);
+
+      // Primero eliminar los enlaces compartidos relacionados
+      const { error: linksError } = await supabase
+        .from('share_links')
+        .delete()
+        .eq('audit_id', auditId);
+
+      if (linksError) {
+        console.error('❌ [ARCHIVOS] Error eliminando enlaces:', linksError);
+      }
+
+      // Luego eliminar los logs forenses relacionados
+      const { error: logsError } = await supabase
+        .from('forensic_logs')
+        .delete()
+        .eq('audit_id', auditId);
+
+      if (logsError) {
+        console.error('❌ [ARCHIVOS] Error eliminando logs forenses:', logsError);
+      }
+
+      // Finalmente eliminar el archivo
+      const { error: fileError } = await supabase
+        .from('uploaded_files')
+        .delete()
+        .eq('audit_id', auditId);
+
+      if (fileError) {
+        console.error('❌ [ARCHIVOS] Error eliminando archivo:', fileError);
+        return false;
+      }
+
+      console.log('✅ [ARCHIVOS] Archivo eliminado exitosamente:', auditId);
+      return true;
+
+    } catch (error) {
+      console.error('❌ [ARCHIVOS] Error inesperado eliminando archivo:', error);
+      return false;
+    }
+  }
+
   // === CONVERTIR ROW DE SUPABASE A FORMATO LOCAL ===
   static convertRowToUploadedFile(row: UploadedFileRow): UploadedFileData & { id: string } {
     return {
