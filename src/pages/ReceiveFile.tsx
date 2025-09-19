@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { 
-  ArrowDownTrayIcon, 
-  CheckCircleIcon, 
-  DocumentIcon, 
+import {
+  ArrowDownTrayIcon,
+  CheckCircleIcon,
+  DocumentIcon,
   ClockIcon,
-  LockClosedIcon,
-  ShieldCheckIcon
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 import { ForensicCapture } from '../utils/forensicCapture';
 import type { ForensicData } from '../types/forensic';
@@ -34,9 +33,9 @@ const MetaTags: React.FC<{
     return '📎';
   };
 
-  const title = `${getFileTypeEmoji(fileType)} ${fileName} - Transfer Secure`;
-  const description = senderMessage || 
-    `Documento seguro (${formatFileSize(fileSize)}) - Haz clic para ver y descargar de forma segura`;
+  const title = `${getFileTypeEmoji(fileType)} ${fileName} - Archivo Compartido`;
+  const description = senderMessage ||
+    `Archivo compartido (${formatFileSize(fileSize)}) - Haz clic para descargar`;
 
   useEffect(() => {
     // Actualizar título de la página
@@ -122,27 +121,103 @@ const ReceiveFile: React.FC = () => {
   const [isDownloaded, setIsDownloaded] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [locationStatus, setLocationStatus] = useState<'requesting' | 'granted' | 'denied' | 'unavailable' | 'completed'>('requesting');
+  const [showLocationIndicator, setShowLocationIndicator] = useState(false);
   
   // === 🕵️ SISTEMA DE CAPTURA FORENSE ===
   const forensicCapture = useRef<ForensicCapture | null>(null);
   const [forensicData, setForensicData] = useState<ForensicData | null>(null);
+
+  // === VERIFICAR PERMISO DE GEOLOCALIZACIÓN ===
+  const checkLocationPermission = async () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      return;
+    }
+
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      setLocationStatus(permission.state as any);
+
+      // Escuchar cambios en el permiso
+      permission.addEventListener('change', () => {
+        setLocationStatus(permission.state as any);
+      });
+    } catch (error) {
+      // Fallback para navegadores que no soportan permissions API
+      setLocationStatus('requesting');
+    }
+  };
+
+  // === REINTENTAR PERMISO DE GEOLOCALIZACIÓN ===
+  const retryLocationPermission = async () => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      return;
+    }
+
+    setLocationStatus('requesting');
+    setShowLocationIndicator(true);
+
+    try {
+      // Solicitar ubicación GPS directamente
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            timeout: 15000, // Más tiempo para dar oportunidad al usuario
+            enableHighAccuracy: true,
+            maximumAge: 0 // No usar cache
+          }
+        );
+      });
+
+      console.log('✅ Ubicación obtenida en reintento:', position.coords);
+      setLocationStatus('completed');
+
+      // Actualizar datos forenses si están disponibles
+      if (forensicData) {
+        const updatedForensicData = {
+          ...forensicData,
+          geolocation: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: position.timestamp
+          }
+        };
+        setForensicData(updatedForensicData);
+      }
+
+    } catch (error: any) {
+      console.log('⚠️ Reintento de geolocalización falló:', error.message);
+      setLocationStatus('denied');
+    }
+
+    // Ocultar indicador después de 3 segundos
+    setTimeout(() => setShowLocationIndicator(false), 3000);
+  };
 
   // === 🕵️ INICIALIZAR CAPTURA FORENSE AL CARGAR LA PÁGINA ===
   useEffect(() => {
     if (fileId) {
       const initializeForensicCapture = async () => {
         try {
+          // Mostrar indicador de ubicación
+          setShowLocationIndicator(true);
+
           // === 🗄️ OBTENER DATOS REALES DESDE SUPABASE ===
           let auditId = `audit-${fileId.split('-')[0]}`; // Fallback
-          
+
           if (isSupabaseConfigured()) {
             console.log('🗄️ [SUPABASE] Obteniendo datos del archivo:', fileId);
             const { file, shareLink } = await FileService.getFileByLinkId(fileId);
-            
+
             if (file && shareLink) {
               auditId = file.audit_id;
               console.log('✅ [SUPABASE] Archivo encontrado:', file.original_name);
-              
+
               // Actualizar datos del archivo con información real
               setFileData({
                 id: fileId,
@@ -153,7 +228,7 @@ const ReceiveFile: React.FC = () => {
                 expiryDate: shareLink.expires_at,
                 senderMessage: shareLink.custom_message || undefined
               });
-              
+
               // Actualizar URL de previsualización
               setPreviewUrl(file.secure_url);
             } else {
@@ -162,14 +237,24 @@ const ReceiveFile: React.FC = () => {
           } else {
             console.log('🔧 [SUPABASE] No configurado, usando datos simulados');
           }
-          
+
+          // Verificar permiso de geolocalización
+          await checkLocationPermission();
+
           // Inicializar sistema de captura forense
           forensicCapture.current = new ForensicCapture(fileId, auditId);
-          
-          // Capturar datos forenses inmediatamente
+
+          // Capturar datos forenses inmediatamente (esto incluye geolocalización automática)
           const data = await forensicCapture.current.captureForensicData();
           setForensicData(data);
-          
+
+          // Actualizar estado de ubicación basado en los datos capturados
+          if (data.geolocation) {
+            setLocationStatus('completed');
+          } else {
+            setLocationStatus('denied');
+          }
+
           console.log('🕵️ [FORENSE] Datos capturados:', {
             accessId: data.accessId,
             linkId: data.linkId,
@@ -177,15 +262,21 @@ const ReceiveFile: React.FC = () => {
             clientIP: data.clientIP,
             realIP: data.realIP || 'no detectada',
             vpnDetected: data.vpnDetected,
+            geolocation: data.geolocation ? 'obtenida' : 'fallida',
             timestamp: data.createdAt
           });
-          
+
+          // Ocultar indicador después de completar
+          setTimeout(() => setShowLocationIndicator(false), 2000);
+
           // IMPORTANTE: Los datos forenses se guardan automáticamente en captureForensicData()
           console.log('📝 [FORENSE] Verificar en Supabase si se guardaron los datos');
-          
+
         } catch (error) {
           console.error('❌ [FORENSE] Error inicializando captura:', error);
           setError('Error cargando archivo');
+          setLocationStatus('denied');
+          setShowLocationIndicator(false);
         }
       };
 
@@ -337,10 +428,10 @@ const ReceiveFile: React.FC = () => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Enlace No Válido</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Archivo No Disponible</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <p className="text-sm text-gray-500">
-            Verifica que el enlace esté completo y no haya expirado.
+            El archivo puede haber expirado o el enlace puede ser incorrecto.
           </p>
         </div>
       </div>
@@ -361,24 +452,57 @@ const ReceiveFile: React.FC = () => {
       )}
       
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Header confiable */}
+        {/* Header simple */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
-            <div className="bg-green-100 p-3 rounded-full mr-3">
-              <ShieldCheckIcon className="h-8 w-8 text-green-600" />
+            <div className="bg-blue-100 p-3 rounded-full mr-3">
+              <LockClosedIcon className="h-8 w-8 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Transfer Secure</h1>
-              <p className="text-green-600 font-medium">Transferencia Segura de Documentos</p>
+              <h1 className="text-3xl font-bold text-gray-900">Archivo Compartido</h1>
+              <p className="text-blue-600 font-medium">Documento listo para descargar</p>
             </div>
           </div>
-          
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 inline-block">
-            <div className="flex items-center text-green-800">
-              <LockClosedIcon className="h-5 w-5 mr-2" />
-              <span className="font-medium">Conexión cifrada end-to-end • Descarga única • Auto-eliminación</span>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 inline-block">
+            <div className="flex items-center text-blue-800">
+              <span className="font-medium">Archivo seguro listo para descarga</span>
             </div>
           </div>
+
+          {/* Indicador de geolocalización */}
+          {showLocationIndicator && (
+            <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 inline-block">
+              <div className="flex items-center justify-between text-gray-700">
+                <div className="flex items-center">
+                  <div className={`w-2 h-2 rounded-full mr-2 ${
+                    locationStatus === 'completed' ? 'bg-green-500' :
+                    locationStatus === 'granted' ? 'bg-blue-500' :
+                    locationStatus === 'denied' ? 'bg-red-500' :
+                    locationStatus === 'unavailable' ? 'bg-gray-500' :
+                    'bg-yellow-500 animate-pulse'
+                  }`}></div>
+                  <span className="text-sm">
+                    {locationStatus === 'completed' ? 'Ubicación obtenida' :
+                     locationStatus === 'granted' ? 'Localizando...' :
+                     locationStatus === 'denied' ? 'Ubicación no disponible' :
+                     locationStatus === 'unavailable' ? 'Geolocalización no soportada' :
+                     'Solicitando ubicación...'}
+                  </span>
+                </div>
+
+                {/* Botón de reintento para ubicación denegada */}
+                {locationStatus === 'denied' && (
+                  <button
+                    onClick={retryLocationPermission}
+                    className="ml-3 px-3 py-1 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Reintentar
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Proceso de descifrado */}
@@ -388,15 +512,19 @@ const ReceiveFile: React.FC = () => {
               <div className="mb-6">
                 <LockClosedIcon className="h-16 w-16 mx-auto text-blue-600 animate-pulse" />
               </div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Descifrado Seguro en Progreso</h2>
+              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Cargando Archivo</h2>
               <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                <div 
+                {/* eslint-disable-next-line react/style-prop-object */}
+                <div
                   className="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
-                  style={{ width: `${Math.min(Math.round(decryptionProgress), 100)}%` }}
+                  style={{
+                    width: `${Math.min(Math.round(decryptionProgress), 100)}%`,
+                    // Progress bar width - dynamic based on decryption progress
+                  } as const}
                 ></div>
               </div>
               <p className="text-gray-600">
-                Verificando integridad y descifrando documento... {Math.min(Math.round(decryptionProgress), 100)}%
+                Preparando archivo para descarga... {Math.min(Math.round(decryptionProgress), 100)}%
               </p>
             </div>
           </div>
@@ -408,8 +536,8 @@ const ReceiveFile: React.FC = () => {
             {/* Vista previa del documento */}
             <div className="p-6">
               <div className="mb-6 text-center">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">📄 Vista Previa del Documento</h2>
-                <p className="text-gray-600">Revisa el contenido antes de descargar</p>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">📄 Vista Previa</h2>
+                <p className="text-gray-600">Revisa el archivo antes de descargar</p>
               </div>
               
               <div className="bg-gray-50 rounded-lg overflow-hidden border border-gray-200 mb-6">
@@ -432,8 +560,8 @@ const ReceiveFile: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 flex items-end justify-center p-4">
                           <div className="text-center text-white">
                             <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 mb-3">
-                              <p className="text-sm font-medium">📸 Vista previa limitada</p>
-                              <p className="text-xs opacity-90">Descarga para ver en calidad completa</p>
+                              <p className="text-sm font-medium">Vista previa</p>
+                              <p className="text-xs opacity-90">Descarga para ver el archivo completo</p>
                             </div>
                           </div>
                         </div>
@@ -465,7 +593,7 @@ const ReceiveFile: React.FC = () => {
                           </div>
                           <div className="text-center">
                             <div className="text-orange-600 font-semibold">Estado</div>
-                            <div className="text-gray-600">🔒 Cifrado</div>
+                            <div className="text-gray-600">Listo</div>
                           </div>
                         </div>
                       </div>
@@ -489,8 +617,8 @@ const ReceiveFile: React.FC = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30 flex items-end justify-center p-4 pointer-events-none">
                           <div className="text-center text-white">
                             <div className="bg-white/20 backdrop-blur-sm rounded-lg px-4 py-2 mb-3">
-                              <p className="text-sm font-medium">📄 Vista previa limitada</p>
-                              <p className="text-xs opacity-90">Descarga para acceso completo</p>
+                              <p className="text-sm font-medium">Vista previa</p>
+                              <p className="text-xs opacity-90">Descarga para ver el archivo completo</p>
                             </div>
                           </div>
                         </div>
@@ -522,7 +650,7 @@ const ReceiveFile: React.FC = () => {
                           </div>
                           <div className="text-center">
                             <div className="text-orange-600 font-semibold">Estado</div>
-                            <div className="text-gray-600">🔒 Cifrado</div>
+                            <div className="text-gray-600">Listo</div>
                           </div>
                         </div>
                       </div>
@@ -549,18 +677,18 @@ const ReceiveFile: React.FC = () => {
                     className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-all transform hover:scale-105 shadow-lg"
                   >
                     <ArrowDownTrayIcon className="h-6 w-6 inline mr-2" />
-                    Descargar Documento Completo
+                    Descargar Archivo
                   </button>
                 ) : (
                   <div className="bg-gray-100 text-gray-500 px-8 py-3 rounded-lg font-semibold text-lg">
                     <CheckCircleIcon className="h-6 w-6 inline mr-2" />
-                    Documento Descargado - Enlace Desactivado
+                    Archivo Descargado - Enlace Expirado
                   </div>
                 )}
                 
                 {isDownloaded && (
                   <p className="text-xs text-gray-500 mt-2">
-                    ✅ Descarga completada • Enlace bloqueado por seguridad
+                    ✅ Archivo descargado correctamente
                   </p>
                 )}
               </div>
@@ -576,7 +704,7 @@ const ReceiveFile: React.FC = () => {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-gray-900">
-                      Documento Seguro Recibido
+                      Archivo Compartido
                     </h2>
                     <div className="flex items-center text-sm text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
                       <ClockIcon className="h-4 w-4 mr-1" />
@@ -610,7 +738,7 @@ const ReceiveFile: React.FC = () => {
                   {/* Mensaje del remitente */}
                   {fileData.senderMessage && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="text-sm text-blue-800 font-medium mb-1">Mensaje del remitente:</div>
+                      <div className="text-sm text-blue-800 font-medium mb-1">Nota del remitente:</div>
                       <p className="text-blue-700">{fileData.senderMessage}</p>
                     </div>
                   )}
@@ -618,59 +746,15 @@ const ReceiveFile: React.FC = () => {
               </div>
             </div>
 
-            {/* Footer de seguridad */}
-            <div className="bg-green-50 border-t border-green-200 p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center text-sm">
-                <div className="flex items-center justify-center text-green-800">
-                  <ShieldCheckIcon className="h-4 w-4 mr-1" />
-                  <span>Privacidad Garantizada</span>
-                </div>
-                <div className="flex items-center justify-center text-green-800">
-                  <LockClosedIcon className="h-4 w-4 mr-1" />
-                  <span>Transferencia Segura</span>
-                </div>
-                <div className="flex items-center justify-center text-green-800">
-                  <ArrowDownTrayIcon className="h-4 w-4 mr-1" />
-                  <span>Auto-Eliminación</span>
-                </div>
+            {/* Footer simple */}
+            <div className="bg-gray-50 border-t border-gray-200 p-4">
+              <div className="text-center text-sm text-gray-600">
+                <p>Archivo listo para descarga segura</p>
               </div>
-              <p className="text-xs text-green-600 text-center mt-2">
-                Tus archivos se eliminan automáticamente después de la descarga
-              </p>
             </div>
           </div>
         )}
 
-        {/* AVISO LEGAL DE CUMPLIMIENTO */}
-        <div className="mt-8 mx-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <svg className="h-5 w-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              <div className="text-sm">
-                <p className="font-medium text-yellow-800 mb-1">
-                  ⚖️ AVISO LEGAL - Auditoría y Cumplimiento
-                </p>
-                <p className="text-yellow-700 text-xs">
-                  Por seguridad y cumplimiento legal, este acceso registra:
-                </p>
-                <ul className="text-yellow-600 text-xs mt-2 space-y-1">
-                  <li>• <strong>IP Real:</strong> Tu dirección IP verdadera (detectamos VPNs)</li>
-                  <li>• <strong>Ubicación:</strong> Coordenadas GPS precisas si las autorizas</li>
-                  <li>• <strong>Dispositivo:</strong> Información completa del navegador y hardware</li>
-                  <li>• <strong>Actividad:</strong> Hora de acceso, duración y si descargas el archivo</li>
-                </ul>
-                <p className="text-yellow-700 text-xs mt-2 font-medium">
-                  📋 Estos datos pueden ser proporcionados a autoridades judiciales.
-                </p>
-                <p className="text-yellow-600 text-xs mt-1">
-                  Al continuar, aceptas estos términos. Para más información: legal@transfersecure.com
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

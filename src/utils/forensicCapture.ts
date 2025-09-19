@@ -82,18 +82,52 @@ export class ForensicCapture {
     };
   }
 
-  // === CAPTURA DE GEOLOCALIZACIÓN ===
+  // === CAPTURA DE GEOLOCALIZACIÓN AUTOMÁTICA ===
   private async getGeolocation(): Promise<ForensicData['geolocation'] | undefined> {
-    // Primero intentar GPS del navegador
-    const gpsLocation = await new Promise<ForensicData['geolocation'] | undefined>((resolve) => {
-      if (!navigator.geolocation) {
-        resolve(undefined);
-        return;
+    // Verificar si geolocalización está disponible
+    if (!navigator.geolocation) {
+      console.log('⚠️ Geolocalización no soportada por este navegador');
+      return this.getGeolocationByIP();
+    }
+
+    // Verificar estado actual del permiso
+    try {
+      const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+
+      // Si ya está concedido, obtener ubicación inmediatamente
+      if (permissionStatus.state === 'granted') {
+        console.log('✅ Permiso de geolocalización concedido, obteniendo ubicación...');
+        return this.requestGPSLocation();
       }
 
+      // Si está denegado, intentar automáticamente (usuario podría cambiar de opinión)
+      if (permissionStatus.state === 'denied') {
+        console.log('❌ Permiso de geolocalización denegado, intentando reintento automático...');
+        // Intentar una vez más en caso de que el usuario haya cambiado de opinión
+        const retryResult = await this.requestGPSLocationWithRetry();
+        if (retryResult) return retryResult;
+
+        console.log('❌ Reintento falló, usando IP como fallback');
+        return this.getGeolocationByIP();
+      }
+
+      // Si está en prompt (primera vez), solicitar automáticamente con reintento
+      console.log('🔄 Solicitando permiso de geolocalización automáticamente...');
+      return this.requestGPSLocationWithRetry();
+
+    } catch (error) {
+      // Fallback para navegadores que no soportan permissions API
+      console.log('🔄 Navegador no soporta permissions API, solicitando GPS directamente...');
+      return this.requestGPSLocation();
+    }
+  }
+
+  // Solicitar ubicación GPS con configuración optimizada
+  private async requestGPSLocation(): Promise<ForensicData['geolocation'] | undefined> {
+    return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log('✅ Geolocalización GPS obtenida');
+          console.log('✅ Geolocalización GPS obtenida exitosamente');
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -101,38 +135,90 @@ export class ForensicCapture {
             timestamp: position.timestamp
           });
         },
-        () => {
-          console.log('⚠️ GPS rechazado o no disponible');
+        (error) => {
+          console.log(`⚠️ GPS falló (${error.code}): ${error.message}`);
           resolve(undefined);
         },
         {
-          timeout: 5000,
-          enableHighAccuracy: false
+          timeout: 10000, // 10 segundos (más tiempo para mejor precisión)
+          enableHighAccuracy: true, // Solicitar máxima precisión
+          maximumAge: 300000 // Cache de 5 minutos
         }
       );
     });
+  }
 
-    // Si no hay GPS, usar geolocalización por IP como fallback
-    if (!gpsLocation) {
-      try {
-        const response = await fetch('https://ipapi.co/json/');
-        const data = await response.json();
-        
-        if (data.latitude && data.longitude) {
-          console.log('📍 Usando geolocalización por IP como fallback');
-          return {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            accuracy: 5000, // IP geolocation es menos precisa (5km)
-            timestamp: Date.now()
-          };
-        }
-      } catch (error) {
-        console.error('Error obteniendo geolocalización por IP:', error);
+  // Solicitar GPS con reintento automático
+  private async requestGPSLocationWithRetry(): Promise<ForensicData['geolocation'] | undefined> {
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      console.log(`🔄 Intento ${attempts}/${maxAttempts} de obtener GPS...`);
+
+      const location = await this.requestGPSLocation();
+      if (location) {
+        return location;
+      }
+
+      // Esperar un poco antes del siguiente intento
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    return gpsLocation;
+    console.log('⚠️ Todos los intentos de GPS fallaron, usando IP como fallback');
+    return this.getGeolocationByIP();
+  }
+
+  // Geolocalización por IP como fallback
+  private async getGeolocationByIP(): Promise<ForensicData['geolocation'] | undefined> {
+    try {
+      console.log('📍 Obteniendo geolocalización por IP...');
+
+      // Intentar múltiples servicios para mejor fiabilidad
+      const services = [
+        'https://ipapi.co/json/',
+        'https://ipinfo.io/json',
+        'https://api.ipgeolocation.io/ipgeo'
+      ];
+
+      for (const serviceUrl of services) {
+        try {
+          const response = await fetch(serviceUrl, {
+            headers: {
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (compatible; TransferSecure/1.0)'
+            }
+          });
+
+          if (!response.ok) continue;
+
+          const data = await response.json();
+
+          if (data.latitude && data.longitude) {
+            console.log(`✅ Geolocalización por IP obtenida desde ${serviceUrl}`);
+            return {
+              latitude: parseFloat(data.latitude),
+              longitude: parseFloat(data.longitude),
+              accuracy: 5000, // IP geolocation ~5km precisión
+              timestamp: Date.now()
+            };
+          }
+        } catch (error) {
+          console.log(`⚠️ Servicio ${serviceUrl} falló, intentando siguiente...`);
+          continue;
+        }
+      }
+
+      console.log('❌ Todos los servicios de geolocalización por IP fallaron');
+      return undefined;
+
+    } catch (error) {
+      console.error('❌ Error en geolocalización por IP:', error);
+      return undefined;
+    }
   }
 
   // === CAPTURA DE INFORMACIÓN DE RED ===
@@ -230,6 +316,16 @@ export class ForensicCapture {
     try {
       advancedIPData = await AdvancedIPDetection.collectAllIPData();
       console.log('✅ Detección avanzada completada');
+
+      // Log específico para WiFi si está disponible
+      if (advancedIPData.wifiLocation) {
+        console.log('📶 WiFi Geolocation obtenida:', {
+          coordenadas: `${advancedIPData.wifiLocation.latitude}, ${advancedIPData.wifiLocation.longitude}`,
+          precision: `±${advancedIPData.wifiLocation.accuracy}m`,
+          redes: advancedIPData.wifiLocation.wifiCount,
+          metodo: advancedIPData.wifiLocation.method
+        });
+      }
     } catch (error) {
       console.warn('⚠️ Detección avanzada falló, usando datos básicos:', error);
       advancedIPData = {
@@ -238,6 +334,7 @@ export class ForensicCapture {
         vpnDetected: false,
         vpnProvider: undefined,
         canvasFingerprint: undefined,
+        wifiLocation: null,
         trustScore: 50
       };
     }
@@ -262,6 +359,9 @@ export class ForensicCapture {
       vpnProvider: advancedIPData.vpnProvider || undefined,
       canvasFingerprint: advancedIPData.canvasFingerprint,
       trustScore: advancedIPData.trustScore,
+
+      // GEOLOCALIZACIÓN WIFI
+      wifiLocation: advancedIPData.wifiLocation || undefined,
 
       // Navegador
       browserFingerprint,

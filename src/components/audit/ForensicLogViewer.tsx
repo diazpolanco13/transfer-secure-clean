@@ -82,14 +82,59 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
   };
 
   const getLocationString = (forensicData: ForensicData) => {
-    if (!forensicData.geolocation) return 'Ubicación no disponible';
-    
-    const { latitude, longitude, accuracy } = forensicData.geolocation;
-    return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy)}m)`;
+    // Primero intentar geolocalización híbrida avanzada ⭐ NUEVO
+    if (forensicData.hybridLocation) {
+      const { latitude, longitude, accuracy, method, confidence, sources } = forensicData.hybridLocation;
+      return `🔥 HÍBRIDA ${method.toUpperCase()}: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (±${Math.round(accuracy)}m, ${confidence}% confianza, ${sources.length} fuentes)`;
+    }
+
+    // Si no hay híbrida, intentar GPS
+    if (forensicData.geolocation) {
+      const { latitude, longitude, accuracy } = forensicData.geolocation;
+      return `GPS: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy)}m)`;
+    }
+
+    // Si no hay GPS, intentar WiFi
+    if (forensicData.wifiLocation) {
+      const { latitude, longitude, accuracy, wifiCount, method } = forensicData.wifiLocation;
+      return `WiFi ${method}: ${latitude.toFixed(4)}, ${longitude.toFixed(4)} (±${Math.round(accuracy)}m, ${wifiCount} redes)`;
+    }
+
+    return 'Ubicación no disponible';
   };
 
   const getSuspiciousWarnings = (forensicData: ForensicData) => {
     return ForensicUtils.detectSuspiciousActivity(forensicData);
+  };
+
+  // Debug function para WiFi
+  const debugWifiData = async () => {
+    console.log('🔍 [DEBUG] Verificando datos WiFi en logs...');
+
+    forensicLogs.forEach((log, index) => {
+      console.log(`📊 Log ${index + 1} (${log.accessId.slice(-8)}):`, {
+        hasWifiLocation: !!log.wifiLocation,
+        wifiLocation: log.wifiLocation,
+        hasGeolocation: !!log.geolocation,
+        geolocation: log.geolocation,
+        trustScore: log.trustScore
+      });
+    });
+
+    // Intentar ejecutar geolocalización WiFi en tiempo real
+    try {
+      console.log('📶 [DEBUG] Probando geolocalización WiFi en tiempo real...');
+      const { AdvancedIPDetection } = await import('../../utils/advancedIPDetection');
+      const wifiResult = await AdvancedIPDetection.getWifiLocation();
+
+      if (wifiResult) {
+        console.log('✅ [DEBUG] WiFi geolocation exitosa:', wifiResult);
+      } else {
+        console.log('⚠️ [DEBUG] WiFi geolocation devolvió null');
+      }
+    } catch (error) {
+      console.error('❌ [DEBUG] Error en geolocalización WiFi:', error);
+    }
   };
 
   const getTotalUniqueIPs = () => {
@@ -99,6 +144,36 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
 
   const getDownloadCount = () => {
     return forensicLogs.filter(log => log.isDownloaded).length;
+  };
+
+  const getWifiLocationCount = () => {
+    return forensicLogs.filter(log => log.wifiLocation).length;
+  };
+
+  const getHybridLocationCount = () => {
+    return forensicLogs.filter(log => log.hybridLocation).length;
+  };
+
+  const getHybridMethodsStats = () => {
+    const methods: Record<string, number> = {};
+    forensicLogs.forEach(log => {
+      if (log.hybridLocation) {
+        const method = log.hybridLocation.method;
+        methods[method] = (methods[method] || 0) + 1;
+      }
+    });
+    return methods;
+  };
+
+  const getAverageHybridConfidence = () => {
+    const hybridLogs = forensicLogs.filter(log => log.hybridLocation);
+    if (hybridLogs.length === 0) return 0;
+
+    const totalConfidence = hybridLogs.reduce((sum, log) =>
+      sum + (log.hybridLocation?.confidence || 0), 0
+    );
+
+    return Math.round(totalConfidence / hybridLogs.length);
   };
 
   if (!isExpanded) {
@@ -112,17 +187,26 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
                 🕵️ Logs Forenses (DESARROLLO)
               </h4>
               <p className={`text-sm ${theme.text.secondary}`}>
-                {forensicLogs.length} accesos • {getTotalUniqueIPs()} IPs únicas • {getDownloadCount()} descargas
+                {forensicLogs.length} accesos • {getTotalUniqueIPs()} IPs únicas • {getDownloadCount()} descargas • {getWifiLocationCount()} WiFi • {getHybridLocationCount()} híbridos
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setIsExpanded(true)}
-            className={`${theme.button.secondary} px-3 py-1 rounded text-sm font-medium transition-colors`}
-          >
-            <EyeIcon className="h-4 w-4 inline mr-1" />
-            Ver Detalles
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setIsExpanded(true)}
+              className={`${theme.button.secondary} px-3 py-1 rounded text-sm font-medium transition-colors`}
+            >
+              <EyeIcon className="h-4 w-4 inline mr-1" />
+              Ver Detalles
+            </button>
+            <button
+              onClick={debugWifiData}
+              className={`${theme.button.secondary} px-3 py-1 rounded text-sm font-medium transition-colors bg-cyan-600 hover:bg-cyan-700 text-white`}
+              title="Debug WiFi geolocation"
+            >
+              📶 Debug WiFi
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -181,7 +265,7 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
       </div>
 
       {/* Estadísticas Generales */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-4 mb-6">
         <div className={`${theme.card} border p-4 rounded-lg text-center`}>
           <div className="text-2xl font-bold text-blue-500">{forensicLogs.length}</div>
           <div className={`text-sm ${theme.text.secondary}`}>Accesos Totales</div>
@@ -195,12 +279,46 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
           <div className={`text-sm ${theme.text.secondary}`}>Descargas</div>
         </div>
         <div className={`${theme.card} border p-4 rounded-lg text-center`}>
+          <div className="text-2xl font-bold text-cyan-500">{getWifiLocationCount()}</div>
+          <div className={`text-sm ${theme.text.secondary}`}>WiFi Básico</div>
+        </div>
+        <div className={`${theme.card} border p-4 rounded-lg text-center`}>
+          <div className="text-2xl font-bold text-orange-500">{getHybridLocationCount()}</div>
+          <div className={`text-sm ${theme.text.secondary}`}>Híbrida Avanzada</div>
+        </div>
+        <div className={`${theme.card} border p-4 rounded-lg text-center`}>
+          <div className="text-2xl font-bold text-emerald-500">{getAverageHybridConfidence()}%</div>
+          <div className={`text-sm ${theme.text.secondary}`}>Confianza Promedio</div>
+        </div>
+        <div className={`${theme.card} border p-4 rounded-lg text-center`}>
           <div className="text-2xl font-bold text-red-500">
             {forensicLogs.reduce((acc, log) => acc + getSuspiciousWarnings(log).length, 0)}
           </div>
           <div className={`text-sm ${theme.text.secondary}`}>Alertas</div>
         </div>
       </div>
+
+      {/* Estadísticas de Métodos Híbridos */}
+      {getHybridLocationCount() > 0 && (
+        <div className={`${theme.card} border p-4 rounded-lg mb-6`}>
+          <h4 className={`font-semibold ${theme.text.primary} mb-3`}>🎯 Métodos de Geolocalización Híbrida Usados</h4>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {Object.entries(getHybridMethodsStats()).map(([method, count]) => (
+              <div key={method} className="text-center">
+                <div className={`text-lg font-bold ${
+                  method === 'gps' ? 'text-green-500' :
+                  method === 'wifi' ? 'text-blue-500' :
+                  method === 'bluetooth' ? 'text-purple-500' :
+                  method === 'cell' ? 'text-orange-500' : 'text-gray-500'
+                }`}>
+                  {count}
+                </div>
+                <div className={`text-sm ${theme.text.secondary} capitalize`}>{method}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
 
       {/* Lista de Logs */}
@@ -305,9 +423,66 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
                     {log.proxyIPs && (
                       <div><strong>Proxies:</strong> {log.proxyIPs.join(', ')}</div>
                     )}
+
+                    {/* NUEVA INFORMACIÓN WIFI */}
+                    {log.wifiLocation && (
+                      <div className="bg-blue-500 bg-opacity-20 px-2 py-1 rounded mt-2 border-l-2 border-blue-500">
+                        <div className="flex items-center text-blue-600 dark:text-blue-400 mb-1">
+                          <span className="text-sm font-semibold">📶 WiFi Geolocation</span>
+                        </div>
+                        <div className="text-xs space-y-0.5">
+                          <div><strong>Coordenadas:</strong> {log.wifiLocation.latitude.toFixed(6)}, {log.wifiLocation.longitude.toFixed(6)}</div>
+                          <div><strong>Precisión:</strong> ±{log.wifiLocation.accuracy}m</div>
+                          <div><strong>Redes detectadas:</strong> {log.wifiLocation.wifiCount}</div>
+                          <div><strong>Método:</strong> {log.wifiLocation.method.toUpperCase()}</div>
+                        </div>
+                      </div>
+                    )}
+
                     <div><strong>Referrer:</strong> {log.referer || 'Directo'}</div>
                   </div>
                 </div>
+
+                {/* GEOLOCALIZACIÓN HÍBRIDA AVANZADA ⭐ NUEVO */}
+                {log.hybridLocation && (
+                  <div className="col-span-3 mt-3">
+                    <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center text-orange-800 dark:text-orange-200 mb-2">
+                        <span className="text-sm font-bold">🎯 GEOLOCALIZACIÓN HÍBRIDA AVANZADA</span>
+                        <span className="ml-2 px-2 py-0.5 bg-orange-200 dark:bg-orange-800 text-xs rounded-full">
+                          {log.hybridLocation.confidence}% confianza
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div><strong>Método Final:</strong> {log.hybridLocation.method.toUpperCase()}</div>
+                        <div><strong>Precisión:</strong> ±{log.hybridLocation.accuracy}m</div>
+                        <div><strong>Fuentes:</strong> {log.hybridLocation.sources.join(', ')}</div>
+                        <div><strong>Coordenadas:</strong> {log.hybridLocation.latitude.toFixed(6)}, {log.hybridLocation.longitude.toFixed(6)}</div>
+                      </div>
+
+                      {/* Detalles de triangulación si están disponibles */}
+                      {log.hybridLocation.triangulationData && (
+                        <div className="mt-2 pt-2 border-t border-orange-300 dark:border-orange-700">
+                          <div className="text-xs text-orange-700 dark:text-orange-300 font-semibold mb-1">🔍 Datos de Triangulación:</div>
+                          <div className="grid grid-cols-2 gap-1 text-xs">
+                            {log.hybridLocation.triangulationData.gps && (
+                              <div>GPS: ±{log.hybridLocation.triangulationData.gps.accuracy}m</div>
+                            )}
+                            {log.hybridLocation.triangulationData.wifi && (
+                              <div>WiFi: {log.hybridLocation.triangulationData.wifi.count} redes</div>
+                            )}
+                            {log.hybridLocation.triangulationData.bluetooth && (
+                              <div>Bluetooth: {log.hybridLocation.triangulationData.bluetooth.count} beacons</div>
+                            )}
+                            {log.hybridLocation.triangulationData.cell && (
+                              <div>Cellular: {log.hybridLocation.triangulationData.cell.strength}/100</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className={`font-medium ${theme.text.primary} mb-1 flex items-center`}>
@@ -371,6 +546,21 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
                     <div><strong>Hardware:</strong> {log.browserFingerprint?.hardwareConcurrency || 'N/A'} cores</div>
                     <div><strong>Device Memory:</strong> {log.browserFingerprint?.deviceMemory || 'N/A'} GB</div>
                     <div><strong>Canvas Hash:</strong> {log.canvasFingerprint || 'N/A'}</div>
+
+                    {/* Información WiFi en detalles completos */}
+                    {log.wifiLocation && (
+                      <div className="col-span-2 bg-blue-50 dark:bg-blue-900/20 p-2 rounded border border-blue-200 dark:border-blue-800 mt-2">
+                        <div className="text-blue-800 dark:text-blue-200 font-semibold text-xs mb-1">📶 WiFi Geolocation Details</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div><strong>Lat:</strong> {log.wifiLocation.latitude.toFixed(6)}</div>
+                          <div><strong>Lng:</strong> {log.wifiLocation.longitude.toFixed(6)}</div>
+                          <div><strong>Accuracy:</strong> ±{log.wifiLocation.accuracy}m</div>
+                          <div><strong>WiFi Networks:</strong> {log.wifiLocation.wifiCount}</div>
+                          <div><strong>Method:</strong> {log.wifiLocation.method}</div>
+                          <div><strong>Source:</strong> Triangulación WiFi</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

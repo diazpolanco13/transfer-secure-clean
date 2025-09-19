@@ -19,6 +19,32 @@ export interface ForensicData {
   vpnProvider?: string;      // Proveedor de VPN si se identifica
   canvasFingerprint?: string;// Huella única del dispositivo
   trustScore?: number;       // Score de confianza (0-100)
+
+  // === GEOLOCALIZACIÓN WIFI (NUEVO) ===
+  wifiLocation?: {
+    latitude: number;        // Latitud obtenida por WiFi
+    longitude: number;       // Longitud obtenida por WiFi
+    accuracy: number;        // Precisión en metros (±50-500m)
+    wifiCount: number;       // Número de redes WiFi detectadas
+    method: 'wifi';          // Método de geolocalización usado
+  };
+
+  // === GEOLOCALIZACIÓN HÍBRIDA AVANZADA (ULTRA-NUEVO) ===
+  hybridLocation?: {
+    latitude: number;        // Latitud de la mejor ubicación
+    longitude: number;       // Longitud de la mejor ubicación
+    accuracy: number;        // Precisión en metros
+    method: 'gps' | 'wifi' | 'bluetooth' | 'cell' | 'ip'; // Método usado
+    confidence: number;      // Confianza 0-100
+    sources: string[];       // Fuentes utilizadas
+    triangulationData?: {    // Datos detallados de cada fuente
+      gps?: { lat: number; lng: number; accuracy: number; altitude?: number; heading?: number; speed?: number };
+      wifi?: { lat: number; lng: number; accuracy: number; count: number };
+      bluetooth?: { lat: number; lng: number; accuracy: number; count: number };
+      cell?: { lat: number; lng: number; accuracy: number; strength: number };
+      ip?: { lat: number; lng: number; accuracy: number; isp: string };
+    };
+  };
   
   // === INFORMACIÓN DEL NAVEGADOR ===
   browserFingerprint: {
