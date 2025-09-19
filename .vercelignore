@@ -1,0 +1,34 @@
+# 🟢 ARCHIVOS QUE NO DEBEN SER IGNORADOS EN VERCEL
+# Mantener archivos públicos accesibles
+
+# NO ignorar archivos de API
+!api/
+!api/**/*.js
+
+# NO ignorar archivos públicos
+!public/
+!public/**/*
+
+# NO ignorar archivos de configuración necesarios
+!middleware.js
+!vercel.json
+!package.json
+
+# NO ignorar archivos fuente principales
+!src/
+!index.html
+
+# Archivos de desarrollo que SÍ pueden ser ignorados
+.vercel/
+.env.local
+.env.development.local
+.env.test.local
+
+# Logs y archivos temporales
+*.log
+.DS_Store
+Thumbs.db
+
+# Node modules (estos se instalan automáticamente)
+node_modules/
+.next/
