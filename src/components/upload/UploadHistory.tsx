@@ -66,21 +66,42 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
   // === 🗄️ CARGAR ARCHIVOS DESDE SUPABASE ===
   useEffect(() => {
     const loadFilesFromSupabase = async () => {
+      console.log('🔍 [DEBUG HISTORIAL] Verificando configuración de Supabase...');
+      console.log('🔍 [DEBUG HISTORIAL] isSupabaseConfigured():', isSupabaseConfigured());
+      console.log('🔍 [DEBUG HISTORIAL] VITE_SUPABASE_URL:', import.meta.env?.VITE_SUPABASE_URL ? '✅ Configurado' : '❌ NO CONFIGURADO');
+      console.log('🔍 [DEBUG HISTORIAL] VITE_SUPABASE_ANON_KEY:', import.meta.env?.VITE_SUPABASE_ANON_KEY ? '✅ Configurado' : '❌ NO CONFIGURADO');
+
       if (isSupabaseConfigured()) {
         setIsLoadingFiles(true);
         try {
           console.log('🗄️ [HISTORIAL] Cargando archivos desde Supabase...');
           const supabaseFiles = await FileService.getUploadedFiles();
+          console.log('🔍 [DEBUG HISTORIAL] Respuesta de getUploadedFiles:', supabaseFiles.length, 'archivos');
+
           const convertedFiles = supabaseFiles.map(FileService.convertRowToUploadedFile);
           setFiles(convertedFiles);
           console.log(`✅ [HISTORIAL] ${convertedFiles.length} archivos cargados`);
+
+          // Mostrar detalles de los archivos cargados
+          convertedFiles.forEach((file, index) => {
+            console.log(`🔍 [DEBUG HISTORIAL] Archivo ${index + 1}:`, {
+              auditId: file.auditId,
+              originalName: file.originalName,
+              fileSize: file.fileSize,
+              uploadedAt: file.uploadedAt
+            });
+          });
+
         } catch (error) {
           console.error('❌ [HISTORIAL] Error cargando archivos:', error);
+          console.log('🔍 [DEBUG HISTORIAL] Usando archivos de props como fallback');
+          setFiles(propFiles || []);
         } finally {
           setIsLoadingFiles(false);
         }
       } else {
-        // Si no hay Supabase, usar los archivos que vienen como prop
+        console.log('🔧 [HISTORIAL] Supabase no configurado, usando archivos de props');
+        console.log('💡 [DEBUG HISTORIAL] Para solucionar: configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en Vercel');
         setFiles(propFiles || []);
       }
     };

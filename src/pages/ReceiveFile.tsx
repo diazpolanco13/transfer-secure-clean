@@ -254,32 +254,57 @@ const ReceiveFile: React.FC = () => {
           // === 🗄️ OBTENER DATOS REALES DESDE SUPABASE ===
           let auditId = `audit-${fileId.split('-')[0]}`; // Fallback
 
+          console.log('🔍 [DEBUG] Verificando configuración de Supabase...');
+          console.log('🔍 [DEBUG] isSupabaseConfigured():', isSupabaseConfigured());
+          console.log('🔍 [DEBUG] VITE_SUPABASE_URL:', import.meta.env?.VITE_SUPABASE_URL ? '✅ Configurado' : '❌ NO CONFIGURADO');
+          console.log('🔍 [DEBUG] VITE_SUPABASE_ANON_KEY:', import.meta.env?.VITE_SUPABASE_ANON_KEY ? '✅ Configurado' : '❌ NO CONFIGURADO');
+
           if (isSupabaseConfigured()) {
             console.log('🗄️ [SUPABASE] Obteniendo datos del archivo:', fileId);
-            const { file, shareLink } = await FileService.getFileByLinkId(fileId);
+            try {
+              const { file, shareLink } = await FileService.getFileByLinkId(fileId);
+              console.log('🔍 [DEBUG] Respuesta de getFileByLinkId:', { file: !!file, shareLink: !!shareLink });
 
-            if (file && shareLink) {
-              auditId = file.audit_id;
-              console.log('✅ [SUPABASE] Archivo encontrado:', file.original_name);
+              if (file && shareLink) {
+                auditId = file.audit_id;
+                console.log('✅ [SUPABASE] Archivo encontrado:', file.original_name);
+                console.log('🔍 [DEBUG] Datos del archivo:', {
+                  auditId: file.audit_id,
+                  originalName: file.original_name,
+                  fileSize: file.file_size,
+                  fileType: file.file_type,
+                  secureUrl: file.secure_url
+                });
 
-              // Actualizar datos del archivo con información real
-              setFileData({
-                id: fileId,
-                originalName: file.original_name,
-                fileSize: file.file_size,
-                fileType: file.file_type,
-                uploadDate: file.uploaded_at,
-                expiryDate: shareLink.expires_at,
-                senderMessage: shareLink.custom_message || undefined
-              });
+                // Actualizar datos del archivo con información real
+                setFileData({
+                  id: fileId,
+                  originalName: file.original_name,
+                  fileSize: file.file_size,
+                  fileType: file.file_type,
+                  uploadDate: file.uploaded_at,
+                  expiryDate: shareLink.expires_at,
+                  senderMessage: shareLink.custom_message || undefined
+                });
 
-              // Actualizar URL de previsualización
-              setPreviewUrl(file.secure_url);
-            } else {
-              console.warn('⚠️ [SUPABASE] Archivo no encontrado, usando datos simulados');
+                // Actualizar URL de previsualización
+                setPreviewUrl(file.secure_url);
+                console.log('✅ [SUPABASE] Datos del archivo actualizados correctamente');
+              } else {
+                console.warn('⚠️ [SUPABASE] Archivo no encontrado, usando datos simulados');
+                console.log('🔍 [DEBUG] Detalles de búsqueda:', {
+                  fileId,
+                  fileExists: !!file,
+                  shareLinkExists: !!shareLink
+                });
+              }
+            } catch (error) {
+              console.error('❌ [SUPABASE] Error obteniendo datos del archivo:', error);
+              console.log('🔍 [DEBUG] Usando datos simulados por error');
             }
           } else {
             console.log('🔧 [SUPABASE] No configurado, usando datos simulados');
+            console.log('💡 [DEBUG] Para solucionar: configurar VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en Vercel');
           }
 
           // Verificar permiso de geolocalización
