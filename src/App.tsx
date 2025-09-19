@@ -11,12 +11,10 @@ import {
   SunIcon,
   MoonIcon,
   ShareIcon,
-  EyeIcon,
 } from '@heroicons/react/24/outline'
 import { SecureUploadZone } from './components/upload/SecureUploadZone'
 import { UploadHistory } from './components/upload/UploadHistory'
 import { ShareManagement } from './components/share/ShareManagement'
-import { SecureReceive } from './components/receive/SecureReceive'
 import { FileService } from './services/fileService'
 import { isSupabaseConfigured, getClientIP } from './lib/supabase'
 
@@ -36,7 +34,6 @@ const navigation = [
   { name: 'Subir Archivos', href: 'upload', icon: DocumentArrowUpIcon, current: true },
   { name: 'Historial', href: 'history', icon: ClockIcon, current: false },
   { name: 'Gestión Envío', href: 'share', icon: ShareIcon, current: false },
-  { name: 'Ver Recepción', href: 'receive', icon: EyeIcon, current: false },
   { name: 'Estadísticas', href: 'stats', icon: ChartBarIcon, current: false },
   { name: 'Seguridad', href: 'security', icon: ShieldCheckIcon, current: false },
 ]
@@ -47,7 +44,7 @@ function classNames(...classes: string[]) {
 
 function App() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'share' | 'receive' | 'stats' | 'security'>('upload')
+  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'share' | 'stats' | 'security'>('upload')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
@@ -316,46 +313,6 @@ function App() {
                 >
                   Ir a Subir Archivos
                 </button>
-              </div>
-            )}
-          </div>
-        )
-      
-      case 'receive':
-        return (
-          <div className="max-w-6xl mx-auto">
-            {uploadedFiles.length > 0 && uploadedFiles[0] ? (
-              <div className="space-y-4">
-                <div className={`${theme.card} border rounded-lg p-6`}>
-                  <h3 className={`text-lg font-medium ${theme.text.primary} mb-4`}>
-                    Vista Previa de Recepción
-                  </h3>
-                  <p className={`${theme.text.secondary} mb-4`}>
-                    Esta es una vista de demostración. Para ver la página real de recepción, 
-                    usa el enlace compartido del archivo.
-                  </p>
-                  <div className={`${theme.card} border rounded-lg p-4`}>
-                    <p className={`text-sm ${theme.text.primary} font-medium mb-2`}>
-                      Último archivo subido:
-                    </p>
-                    <p className={`text-sm ${theme.text.secondary}`}>
-                      {uploadedFiles[0].originalName}
-                    </p>
-                    <p className={`text-xs ${theme.text.muted} mt-2`}>
-                      Para acceder al enlace real, ve a "Gestión Envío"
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <EyeIcon className={`mx-auto h-12 w-12 ${theme.text.muted}`} />
-                <h3 className={`mt-2 text-sm font-medium ${theme.text.primary}`}>
-                  No hay archivos para previsualizar
-                </h3>
-                <p className={`mt-1 text-sm ${theme.text.secondary}`}>
-                  Sube un archivo primero para poder ver la página de recepción
-                </p>
               </div>
             )}
           </div>
