@@ -84,50 +84,65 @@ export class ForensicCapture {
 
   // === CAPTURA DE GEOLOCALIZACIÓN AUTOMÁTICA ===
   private async getGeolocation(): Promise<ForensicData['geolocation'] | undefined> {
+    console.log('🗺️ [GEOLOCATION] Iniciando captura de ubicación...');
+
     // Verificar si geolocalización está disponible
     if (!navigator.geolocation) {
-      console.log('⚠️ Geolocalización no soportada por este navegador');
+      console.log('⚠️ [GEOLOCATION] Geolocalización no soportada por este navegador');
+      console.log('🔄 [GEOLOCATION] Usando IP como fallback');
       return this.getGeolocationByIP();
     }
+
+    console.log('✅ [GEOLOCATION] API de geolocalización disponible');
 
     // Verificar estado actual del permiso
     try {
       const permissionStatus = await navigator.permissions.query({ name: 'geolocation' });
+      console.log('🔐 [GEOLOCATION] Estado del permiso:', permissionStatus.state);
 
       // Si ya está concedido, obtener ubicación inmediatamente
       if (permissionStatus.state === 'granted') {
-        console.log('✅ Permiso de geolocalización concedido, obteniendo ubicación...');
+        console.log('✅ [GEOLOCATION] Permiso concedido, obteniendo ubicación GPS...');
         return this.requestGPSLocation();
       }
 
       // Si está denegado, intentar automáticamente (usuario podría cambiar de opinión)
       if (permissionStatus.state === 'denied') {
-        console.log('❌ Permiso de geolocalización denegado, intentando reintento automático...');
+        console.log('❌ [GEOLOCATION] Permiso denegado, intentando reintento automático...');
         // Intentar una vez más en caso de que el usuario haya cambiado de opinión
         const retryResult = await this.requestGPSLocationWithRetry();
         if (retryResult) return retryResult;
 
-        console.log('❌ Reintento falló, usando IP como fallback');
+        console.log('❌ [GEOLOCATION] Reintento falló, usando IP como fallback');
         return this.getGeolocationByIP();
       }
 
       // Si está en prompt (primera vez), solicitar automáticamente con reintento
-      console.log('🔄 Solicitando permiso de geolocalización automáticamente...');
+      console.log('🔄 [GEOLOCATION] Primera vez - solicitando permiso automáticamente...');
       return this.requestGPSLocationWithRetry();
 
     } catch (error) {
       // Fallback para navegadores que no soportan permissions API
-      console.log('🔄 Navegador no soporta permissions API, solicitando GPS directamente...');
+      console.log('🔄 [GEOLOCATION] Navegador sin permissions API, solicitando GPS directamente...');
+      console.log('⚠️ [GEOLOCATION] Error en permissions API:', error);
       return this.requestGPSLocation();
     }
   }
 
   // Solicitar ubicación GPS con configuración optimizada
   private async requestGPSLocation(): Promise<ForensicData['geolocation'] | undefined> {
+    console.log('📡 [GPS] Solicitando ubicación GPS al navegador...');
+
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          console.log('✅ Geolocalización GPS obtenida exitosamente');
+          console.log('✅ [GPS] Geolocalización GPS obtenida exitosamente');
+          console.log('📍 [GPS] Coordenadas:', {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            timestamp: new Date(position.timestamp).toISOString()
+          });
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -136,7 +151,13 @@ export class ForensicCapture {
           });
         },
         (error) => {
-          console.log(`⚠️ GPS falló (${error.code}): ${error.message}`);
+          const errorMessages = {
+            1: 'Usuario denegó el permiso de ubicación',
+            2: 'Posición no disponible',
+            3: 'Tiempo de espera agotado'
+          };
+          console.log(`⚠️ [GPS] Error ${error.code}: ${errorMessages[error.code] || error.message}`);
+          console.log('🔄 [GPS] Continuando con geolocalización por IP...');
           resolve(undefined);
         },
         {
@@ -175,7 +196,8 @@ export class ForensicCapture {
   // Geolocalización por IP como fallback
   private async getGeolocationByIP(): Promise<ForensicData['geolocation'] | undefined> {
     try {
-      console.log('📍 Obteniendo geolocalización por IP...');
+      console.log('🌐 [IP-GEOLOCATION] Iniciando geolocalización por IP...');
+      console.log('📡 [IP-GEOLOCATION] Intentando múltiples servicios de geolocalización...');
 
       // Intentar múltiples servicios para mejor fiabilidad
       const services = [
