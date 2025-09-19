@@ -591,7 +591,6 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                             generateMockForensicLogs(file.auditId)
                           }
                           darkMode={darkMode}
-                          isDevelopment={true} // Ahora disponible en producción
                         />
                       </td>
                     </tr>
@@ -693,7 +692,6 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                     generateMockForensicLogs(file.auditId)
                   }
                   darkMode={darkMode}
-                  isDevelopment={true} // Ahora disponible en producción
                 />
               </div>
             )}

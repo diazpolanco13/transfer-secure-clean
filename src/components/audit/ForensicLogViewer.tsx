@@ -21,15 +21,13 @@ interface ForensicLogViewerProps {
   fileName: string;
   forensicLogs: ForensicData[];
   darkMode?: boolean;
-  isDevelopment?: boolean; // Toggle para mostrar/ocultar en producción
 }
 
 export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
   linkId,
   fileName,
   forensicLogs,
-  darkMode = true,
-  isDevelopment = import.meta.env.DEV
+  darkMode = true
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedLog, setSelectedLog] = useState<ForensicData | null>(null);
