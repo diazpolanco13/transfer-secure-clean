@@ -88,11 +88,14 @@ export default async function handler(req, res) {
       // 👤 REDIRIGIR A APLICACIÓN REACT PARA USUARIOS
       console.log('👤 [RECEIVE] Usuario detectado, redirigiendo a app');
 
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:5173';
+      // Construir URL base desde el request actual
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers['host'] || req.headers['x-forwarded-host'];
+      const baseUrl = `${protocol}://${host}`;
 
-      // Redirigir a la aplicación React
+      console.log('🔄 [RECEIVE] Redirigiendo usuario a:', `${baseUrl}/#/receive/${fileId}`);
+
+      // Redirigir a la aplicación React con hash routing
       res.setHeader('Location', `${baseUrl}/#/receive/${fileId}`);
       return res.status(302).send('Redirecting to app...');
     }

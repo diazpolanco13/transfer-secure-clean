@@ -9,7 +9,7 @@
       "destination": "/api/receive/$1"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
