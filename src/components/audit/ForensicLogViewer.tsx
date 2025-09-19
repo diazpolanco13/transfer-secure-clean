@@ -36,10 +36,8 @@ export const ForensicLogViewer: React.FC<ForensicLogViewerProps> = ({
   // const [, setShowMap] = useState(false); // No usado actualmente
   const [openMaps, setOpenMaps] = useState<Set<number>>(new Set());
 
-  // En producción, no mostrar nada si no es desarrollo
-  if (!isDevelopment) {
-    return null;
-  }
+  // Mostrar logs forenses tanto en desarrollo como producción
+  // (anteriormente estaba limitado solo a desarrollo)
 
   // Funciones para manejar múltiples mapas
   const toggleMap = (index: number) => {

@@ -561,16 +561,14 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                         >
                           Compartir
                         </button>
-                        {import.meta.env.DEV && (
-                          <button
-                            onClick={() => handleViewForensicLogs(file)}
-                            className={`${theme.button.blue} text-xs px-2 py-1 rounded hover:underline flex items-center`}
-                            title="Ver logs forenses"
-                          >
-                            <ShieldCheckIcon className="h-3 w-3 mr-1" />
-                            Logs
-                          </button>
-                        )}
+                        <button
+                          onClick={() => handleViewForensicLogs(file)}
+                          className={`${theme.button.blue} text-xs px-2 py-1 rounded hover:underline flex items-center`}
+                          title="Ver logs forenses"
+                        >
+                          <ShieldCheckIcon className="h-3 w-3 mr-1" />
+                          Logs
+                        </button>
                         <button
                           onClick={() => onDelete?.(file)}
                           className={`${theme.button.red} text-xs px-2 py-1 rounded hover:underline`}
@@ -588,12 +586,12 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                           linkId={`link-${file.auditId.split('-')[1]}`}
                           fileName={file.originalName}
                           forensicLogs={
-                            realForensicLogs[file.auditId] || 
-                            file.forensicLogs || 
+                            realForensicLogs[file.auditId] ||
+                            file.forensicLogs ||
                             generateMockForensicLogs(file.auditId)
                           }
                           darkMode={darkMode}
-                          isDevelopment={import.meta.env.DEV}
+                          isDevelopment={true} // Ahora disponible en producción
                         />
                       </td>
                     </tr>
@@ -690,12 +688,12 @@ export const UploadHistory: React.FC<UploadHistoryProps> = ({
                   linkId={`link-${file.auditId.split('-')[1]}`}
                   fileName={file.originalName}
                   forensicLogs={
-                    realForensicLogs[file.auditId] || 
-                    file.forensicLogs || 
+                    realForensicLogs[file.auditId] ||
+                    file.forensicLogs ||
                     generateMockForensicLogs(file.auditId)
                   }
                   darkMode={darkMode}
-                  isDevelopment={import.meta.env.DEV}
+                  isDevelopment={true} // Ahora disponible en producción
                 />
               </div>
             )}
