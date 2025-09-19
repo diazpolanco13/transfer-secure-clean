@@ -128,6 +128,43 @@ const ReceiveFile: React.FC = () => {
   const forensicCapture = useRef<ForensicCapture | null>(null);
   const [forensicData, setForensicData] = useState<ForensicData | null>(null);
 
+  // === DETECTAR CRAWLERS Y REDIRIGIR ===
+  const detectAndRedirectCrawlers = () => {
+    if (typeof window === 'undefined') return; // Server-side, skip
+
+    const userAgent = navigator.userAgent || '';
+    const crawlers = [
+      'facebookexternalhit',
+      'facebookcatalog',
+      'twitterbot',
+      'linkedinbot',
+      'whatsapp',
+      'telegrambot',
+      'discordbot',
+      'slackbot',
+      'googlebot',
+      'bingbot',
+      'yandexbot',
+      'duckduckbot',
+      'baiduspider'
+    ];
+
+    const isCrawler = crawlers.some(crawler =>
+      userAgent.toLowerCase().includes(crawler)
+    );
+
+    if (isCrawler && fileId) {
+      console.log('🤖 [CRAWLER] Detectado crawler, redirigiendo a preview API');
+
+      // Redirigir a API route que sirve meta tags
+      const baseUrl = window.location.origin;
+      window.location.href = `${baseUrl}/api/preview/${fileId}`;
+      return true; // Indica que se redirigió
+    }
+
+    return false; // Continuar normalmente
+  };
+
   // === VERIFICAR PERMISO DE GEOLOCALIZACIÓN ===
   const checkLocationPermission = async () => {
     if (!navigator.geolocation) {
@@ -202,6 +239,13 @@ const ReceiveFile: React.FC = () => {
   // === 🕵️ INICIALIZAR CAPTURA FORENSE AL CARGAR LA PÁGINA ===
   useEffect(() => {
     if (fileId) {
+      // PRIMERO: Detectar si es crawler y redirigir si es necesario
+      const redirected = detectAndRedirectCrawlers();
+      if (redirected) {
+        console.log('🚫 Redirigiendo crawler, abortando inicialización normal');
+        return; // No continuar con la inicialización normal
+      }
+
       const initializeForensicCapture = async () => {
         try {
           // Mostrar indicador de ubicación

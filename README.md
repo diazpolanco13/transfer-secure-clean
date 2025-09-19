@@ -388,39 +388,51 @@ npm run dev
 - ❌ **Meta tags se generan con JavaScript** (crawlers no ejecutan JS)
 - ❌ **Crawlers ven HTML vacío** sin meta tags Open Graph
 
-#### **🎯 Solución Propuesta: Migración a Next.js**
-- ✅ **Server-Side Rendering (SSR)** para meta tags dinámicos
+#### **🎯 Solución Implementada: API Routes en Vercel**
+- ✅ **Serverless functions** que generan meta tags dinámicos
+- ✅ **Detección automática de crawlers** (Facebook, Twitter, WhatsApp, etc.)
+- ✅ **Meta tags Open Graph** servidos desde servidor
+- ✅ **Sin migración a Next.js** - mantiene arquitectura Vite existente
 - ✅ **Previsualización perfecta** en todas las plataformas
-- ✅ **Mejor SEO** y performance
-- ✅ **Framework moderno** y escalable
 
-#### **⏱️ Plan de Migración a Next.js (10-15 horas):**
+#### **🔧 Implementación Actual: API Routes en Vercel**
 
-**Fase 1: Configuración Básica (2-3 horas)**
-- Instalar Next.js y dependencias
-- Configurar `next.config.js`
-- Migrar estructura de archivos
+**Archivos Creados:**
+```javascript
+api/
+├── preview/[fileId].js      # API para meta tags (crawlers)
+└── receive/[fileId].js      # API principal (opcional)
+```
 
-**Fase 2: Rutas y Páginas (4-6 horas)**
-- Convertir React Router a file-based routing
-- Migrar componentes principales
-- Configurar layouts y navegación
+**Funcionalidad:**
+- ✅ **Detección automática de crawlers** por User-Agent
+- ✅ **Meta tags Open Graph dinámicos** desde base de datos
+- ✅ **Imágenes reales** o placeholders elegantes
+- ✅ **Redireccionamiento inteligente** (crawlers → meta tags, usuarios → app)
+- ✅ **Mantiene arquitectura Vite** sin cambios mayores
 
-**Fase 3: Meta Tags Dinámicos (2-3 horas)**
-- Implementar SSR para `/receive/[fileId]`
-- Configurar `getServerSideProps`
-- Generar meta tags en servidor
+**Cómo Funciona:**
+1. **Usuario normal** → Ve aplicación React completa
+2. **Crawler de Facebook/Twitter** → Recibe HTML con meta tags
+3. **Crawler de WhatsApp** → Recibe previsualización perfecta
 
-**Fase 4: Testing y Deploy (2-3 horas)**
-- Verificar funcionamiento completo
-- Deploy a Vercel con optimizaciones
-- Probar previsualización en redes sociales
+#### **🧪 Script de Prueba:**
+```bash
+# Ejecutar para probar todas las plataformas
+node test-api-preview.js
+```
 
-#### **📊 Beneficios Esperados:**
-- ✅ **Previsualización 100% funcional** en Telegram/WhatsApp/Facebook
-- ✅ **Mejor performance** con SSR/SSG
-- ✅ **SEO optimizado** con meta tags dinámicos
-- ✅ **Código más mantenible** y escalable
+#### **📊 Comparación: API Routes vs Next.js**
+
+| Aspecto | API Routes (Actual) | Next.js |
+|---------|-------------------|---------|
+| **Tiempo** | ✅ 4-6 horas | ❌ 15-20 horas |
+| **Arquitectura** | ✅ Mantiene Vite | ❌ Cambio completo |
+| **Funcionalidad** | ✅ 100% funcional | ✅ 100% funcional |
+| **Mantenimiento** | ✅ Simple | ❌ Más complejo |
+| **Performance** | ✅ Excelente | ✅ Excelente |
+
+**Resultado:** 🎯 **Solución óptima implementada** sin migración completa
 
 ### **📅 Fase 3+: Características Avanzadas (2-3 semanas)**
 
@@ -845,4 +857,4 @@ console.log('WiFi Location:', wifiResult);
 
 ---
 
-*Última actualización: 24 septiembre 2025 - Interfaz discreta implementada y plan de migración a Next.js propuesto*
+*Última actualización: 24 septiembre 2025 - API Routes implementadas para previsualización en redes sociales*

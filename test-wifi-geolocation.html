@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗺️ Test Geolocalización WiFi - Transfer Secure</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: #22c55e;
+        }
+
+        .status.warning {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: #f59e0b;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .status.info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .results {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .wifi-network {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #22c55e;
+        }
+
+        .wifi-network.weak {
+            border-left-color: #ef4444;
+        }
+
+        .wifi-network.medium {
+            border-left-color: #f59e0b;
+        }
+
+        .wifi-network.strong {
+            border-left-color: #22c55e;
+        }
+
+        .map-container {
+            height: 300px;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22c55e, #3b82f6);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ Test de Geolocalización WiFi</h1>
+        <p>Esta herramienta demuestra cómo funciona la geolocalización WiFi en Transfer Secure</p>
+
+        <div id="status" class="status info">
+            🔄 Haz clic en "Iniciar Test" para comenzar
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: #22c55e;"></div>
+                <span>Alta Precisión (±10m)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3b82f6;"></div>
+                <span>Precisión WiFi (±50-500m)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b;"></div>
+                <span>Precisión IP (±5km)</span>
+            </div>
+        </div>
+
+        <button id="startBtn" onclick="startWifiTest()">🚀 Iniciar Test WiFi</button>
+        <button id="gpsBtn" onclick="testGPSOnly()">📍 GPS Directo</button>
+        <button id="clearBtn" onclick="clearResults()">🧹 Limpiar</button>
+
+        <div class="progress-bar">
+            <div id="progressFill" class="progress-fill"></div>
+        </div>
+
+        <div id="results" class="results" style="display: none;">
+            <!-- Los resultados se mostrarán aquí -->
+        </div>
+
+        <div id="mapContainer" class="map-container" style="display: none;">
+            <!-- El mapa se mostrará aquí -->
+        </div>
+    </div>
+
+    <script>
+        // Simulación de la clase AdvancedIPDetection
+        class WifiGeolocationTester {
+
+            constructor() {
+                this.results = [];
+                this.map = null;
+            }
+
+            // === MÉTODO PRINCIPAL ===
+            async getWifiLocation() {
+                this.updateStatus('📶 Iniciando geolocalización WiFi...', 'info');
+                this.setProgress(10);
+
+                if (!navigator.geolocation) {
+                    throw new Error('Geolocation API no disponible');
+                }
+
+                return new Promise((resolve) => {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            this.setProgress(30);
+                            this.updateStatus('✅ GPS disponible - usando alta precisión', 'success');
+
+                            const gpsLocation = {
+                                latitude: position.coords.latitude,
+                                longitude: position.coords.longitude,
+                                accuracy: position.coords.accuracy,
+                                wifiCount: 0,
+                                method: 'gps',
+                                source: 'GPS Directo'
+                            };
+
+                            this.results.push(gpsLocation);
+                            this.displayResults();
+                            resolve(gpsLocation);
+                        },
+                        async (error) => {
+                            this.updateStatus('⚠️ GPS falló - intentando WiFi...', 'warning');
+                            this.setProgress(40);
+
+                            // GPS falló - intentar WiFi
+                            try {
+                                const wifiLocation = await this.performWifiGeolocation();
+                                resolve(wifiLocation);
+                            } catch (wifiError) {
+                                this.updateStatus('❌ WiFi también falló - usando IP fallback', 'error');
+                                this.setProgress(60);
+
+                                // Último recurso: geolocalización por IP
+                                const ipLocation = await this.getIPGeolocation();
+                                resolve(ipLocation);
+                            }
+                        },
+                        {
+                            timeout: 10000,
+                            enableHighAccuracy: true,
+                            maximumAge: 300000
+                        }
+                    );
+                });
+            }
+
+            // === GEOLOCALIZACIÓN WIFI REAL ===
+            async performWifiGeolocation() {
+                this.updateStatus('🔍 Escaneando redes WiFi...', 'info');
+                this.setProgress(50);
+
+                // Simular escaneo de redes WiFi
+                const wifiNetworks = await this.scanWifiNetworks();
+
+                if (!wifiNetworks || wifiNetworks.length === 0) {
+                    throw new Error('No se encontraron redes WiFi');
+                }
+
+                this.updateStatus(`📶 Encontradas ${wifiNetworks.length} redes WiFi`, 'success');
+                this.displayWifiNetworks(wifiNetworks);
+
+                // Simular consulta a servicios de geolocalización
+                const locationData = await this.queryGeolocationService(wifiNetworks);
+
+                const wifiLocation = {
+                    latitude: locationData.lat,
+                    longitude: locationData.lng,
+                    accuracy: locationData.accuracy,
+                    wifiCount: wifiNetworks.length,
+                    method: 'wifi',
+                    source: 'WiFi Geolocation',
+                    networks: wifiNetworks
+                };
+
+                this.results.push(wifiLocation);
+                this.displayResults();
+                return wifiLocation;
+            }
+
+            // === ESCANEAR REDES WIFI (SIMULADO) ===
+            async scanWifiNetworks() {
+                // Simular redes WiFi cercanas
+                const mockNetworks = [
+                    { bssid: '00:11:22:33:44:55', ssid: 'Home-WiFi', signalStrength: -45, frequency: 2412, channel: 1 },
+                    { bssid: 'AA:BB:CC:DD:EE:FF', ssid: 'CafeWiFi', signalStrength: -65, frequency: 2437, channel: 6 },
+                    { bssid: '11:22:33:44:55:66', ssid: 'OfficeNet', signalStrength: -75, frequency: 2462, channel: 11 },
+                    { bssid: '77:88:99:AA:BB:CC', ssid: 'Neighbor', signalStrength: -85, frequency: 2412, channel: 1 }
+                ];
+
+                // Simular delay de escaneo
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                return mockNetworks.filter(net => net.signalStrength > -90);
+            }
+
+            // === CONSULTAR SERVICIO DE GEOLOCALIZACIÓN ===
+            async queryGeolocationService(wifiNetworks) {
+                this.updateStatus('🌐 Consultando servicios de geolocalización...', 'info');
+
+                // Simular consultas a diferentes servicios
+                const services = ['Google Geolocation', 'Mozilla Location', 'OpenWiFiMap'];
+                let locationData = null;
+
+                for (const service of services) {
+                    this.updateStatus(`📡 Probando ${service}...`, 'info');
+
+                    try {
+                        // Simular llamada a API
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                        // Simular respuesta exitosa (90% de éxito)
+                        if (Math.random() > 0.1) {
+                            locationData = {
+                                lat: 10.5061 + (Math.random() - 0.5) * 0.01, // Caracas ± ~1km
+                                lng: -66.9146 + (Math.random() - 0.5) * 0.01,
+                                accuracy: 150 + Math.floor(Math.random() * 350) // 150-500m
+                            };
+
+                            this.updateStatus(`✅ ${service} exitoso`, 'success');
+                            break;
+                        } else {
+                            throw new Error('Servicio no disponible');
+                        }
+                    } catch (error) {
+                        this.updateStatus(`⚠️ ${service} falló`, 'warning');
+                    }
+                }
+
+                if (!locationData) {
+                    throw new Error('Todos los servicios fallaron');
+                }
+
+                return locationData;
+            }
+
+            // === GEOLOCALIZACIÓN POR IP (FALLBACK) ===
+            async getIPGeolocation() {
+                this.updateStatus('🌍 Usando geolocalización por IP...', 'warning');
+
+                try {
+                    const response = await fetch('https://ipapi.co/json/');
+                    const data = await response.json();
+
+                    const ipLocation = {
+                        latitude: data.latitude,
+                        longitude: data.longitude,
+                        accuracy: 5000, // ±5km típico para IP
+                        wifiCount: 0,
+                        method: 'ip',
+                        source: 'IP Geolocation',
+                        city: data.city,
+                        country: data.country_name
+                    };
+
+                    this.results.push(ipLocation);
+                    this.displayResults();
+                    return ipLocation;
+
+                } catch (error) {
+                    throw new Error('Geolocalización por IP falló');
+                }
+            }
+
+            // === MOSTRAR RESULTADOS ===
+            displayResults() {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'block';
+
+                let output = '📊 RESULTADOS DE GEOLOCALIZACIÓN\n';
+                output += '=' .repeat(50) + '\n\n';
+
+                this.results.forEach((result, index) => {
+                    output += `🔍 MÉTODO ${index + 1}: ${result.source}\n`;
+                    output += `   📍 Coordenadas: ${result.latitude.toFixed(6)}, ${result.longitude.toFixed(6)}\n`;
+                    output += `   🎯 Precisión: ±${result.accuracy}m\n`;
+                    output += `   📶 Redes WiFi: ${result.wifiCount}\n`;
+
+                    if (result.method === 'wifi' && result.networks) {
+                        output += `   📋 Redes detectadas:\n`;
+                        result.networks.forEach(net => {
+                            output += `      • ${net.ssid} (${net.signalStrength}dBm, Ch.${net.channel})\n`;
+                        });
+                    }
+
+                    if (result.city) {
+                        output += `   🏙️ Ubicación: ${result.city}, ${result.country}\n`;
+                    }
+
+                    output += '\n';
+                });
+
+                // Calcular score de confianza
+                const bestResult = this.results[0];
+                let trustScore = 100;
+
+                if (bestResult.method === 'ip') trustScore -= 50;
+                if (bestResult.accuracy > 1000) trustScore -= 20;
+                if (bestResult.wifiCount > 0) trustScore += 10;
+
+                output += `🎯 SCORE DE CONFIANZA: ${trustScore}%\n`;
+                output += `🏆 MEJOR MÉTODO: ${bestResult.source} (±${bestResult.accuracy}m)\n`;
+
+                resultsDiv.textContent = output;
+
+                // Mostrar mapa
+                this.showMap();
+
+                this.setProgress(100);
+                this.updateStatus('✅ Test completado exitosamente', 'success');
+            }
+
+            // === MOSTRAR REDES WIFI ===
+            displayWifiNetworks(networks) {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.style.display = 'block';
+
+                let wifiHtml = '<div style="margin: 20px 0;">';
+                wifiHtml += '<h3>📶 Redes WiFi Detectadas</h3>';
+
+                networks.forEach(net => {
+                    const signalClass = net.signalStrength > -60 ? 'strong' :
+                                      net.signalStrength > -75 ? 'medium' : 'weak';
+                    const signalText = net.signalStrength > -60 ? 'Fuerte' :
+                                     net.signalStrength > -75 ? 'Medio' : 'Débil';
+
+                    wifiHtml += `<div class="wifi-network ${signalClass}">`;
+                    wifiHtml += `<strong>${net.ssid}</strong> (${signalText})<br>`;
+                    wifiHtml += `Señal: ${net.signalStrength}dBm | Canal: ${net.channel} | ${net.frequency}MHz`;
+                    wifiHtml += '</div>';
+                });
+
+                wifiHtml += '</div>';
+
+                // Agregar al final de los resultados
+                setTimeout(() => {
+                    resultsDiv.innerHTML += wifiHtml;
+                }, 100);
+            }
+
+            // === MOSTRAR MAPA ===
+            showMap() {
+                const mapContainer = document.getElementById('mapContainer');
+                mapContainer.style.display = 'block';
+
+                if (this.results.length > 0) {
+                    const bestResult = this.results[0];
+
+                    // Simular mapa con coordenadas
+                    mapContainer.innerHTML = `
+                        <div style="width: 100%; height: 100%; background: #e3f2fd; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
+                            <div style="text-align: center; color: #1976d2;">
+                                <h3>🗺️ Ubicación Detectada</h3>
+                                <p><strong>Lat:</strong> ${bestResult.latitude.toFixed(6)}</p>
+                                <p><strong>Lng:</strong> ${bestResult.longitude.toFixed(6)}</p>
+                                <p><strong>Precisión:</strong> ±${bestResult.accuracy}m</p>
+                                <p><strong>Método:</strong> ${bestResult.source}</p>
+                                <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                                    Nota: Este es un mapa simulado. En producción se usaría Google Maps o Leaflet.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            // === UTILIDADES ===
+            updateStatus(message, type) {
+                const statusDiv = document.getElementById('status');
+                statusDiv.className = `status ${type}`;
+                statusDiv.textContent = message;
+            }
+
+            setProgress(percent) {
+                const progressFill = document.getElementById('progressFill');
+                progressFill.style.width = `${percent}%`;
+            }
+        }
+
+        // === FUNCIONES GLOBALES ===
+        const tester = new WifiGeolocationTester();
+
+        async function startWifiTest() {
+            const startBtn = document.getElementById('startBtn');
+            const gpsBtn = document.getElementById('gpsBtn');
+
+            startBtn.disabled = true;
+            gpsBtn.disabled = true;
+
+            try {
+                await tester.getWifiLocation();
+            } catch (error) {
+                tester.updateStatus(`❌ Error: ${error.message}`, 'error');
+                tester.setProgress(0);
+            }
+
+            startBtn.disabled = false;
+            gpsBtn.disabled = false;
+        }
+
+        async function testGPSOnly() {
+            const startBtn = document.getElementById('startBtn');
+            const gpsBtn = document.getElementById('gpsBtn');
+
+            startBtn.disabled = true;
+            gpsBtn.disabled = true;
+
+            tester.updateStatus('📍 Probando GPS directo...', 'info');
+
+            try {
+                if (!navigator.geolocation) {
+                    throw new Error('GPS no disponible');
+                }
+
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        timeout: 10000,
+                        enableHighAccuracy: true
+                    });
+                });
+
+                const gpsResult = {
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    wifiCount: 0,
+                    method: 'gps',
+                    source: 'GPS Directo'
+                };
+
+                tester.results = [gpsResult];
+                tester.displayResults();
+
+                tester.updateStatus('✅ GPS exitoso', 'success');
+
+            } catch (error) {
+                tester.updateStatus(`❌ GPS falló: ${error.message}`, 'error');
+            }
+
+            startBtn.disabled = false;
+            gpsBtn.disabled = false;
+        }
+
+        function clearResults() {
+            tester.results = [];
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('mapContainer').style.display = 'none';
+            document.getElementById('status').className = 'status info';
+            document.getElementById('status').textContent = '🔄 Haz clic en "Iniciar Test" para comenzar';
+            document.getElementById('progressFill').style.width = '0%';
+        }
+
+        // === INSTRUCCIONES ===
+        console.log('🗺️ Test de Geolocalización WiFi - Transfer Secure');
+        console.log('==========================================');
+        console.log('');
+        console.log('Esta herramienta demuestra cómo funciona la geolocalización WiFi:');
+        console.log('');
+        console.log('1. 🔍 PRIMERO: Intenta GPS de alta precisión (±10m)');
+        console.log('2. 📶 SEGUNDO: Si GPS falla, escanea redes WiFi');
+        console.log('3. 🌐 TERCERO: Consulta servicios de geolocalización');
+        console.log('4. 📍 ÚLTIMO: Fallback a geolocalización por IP (±5km)');
+        console.log('');
+        console.log('La precisión típica es:');
+        console.log('• GPS: ±10-100 metros');
+        console.log('• WiFi: ±50-500 metros');
+        console.log('• IP: ±5.000 metros');
+        console.log('');
+        console.log('¡Haz clic en "Iniciar Test" para probar!');
+    </script>
+</body>
+</html>
